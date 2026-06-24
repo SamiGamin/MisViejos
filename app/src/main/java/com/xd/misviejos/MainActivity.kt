@@ -6,6 +6,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.background
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -18,7 +19,6 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.ExitToApp
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -48,8 +48,10 @@ import com.xd.misviejos.data.repository.FirestoreFamiliaRepository
 import com.xd.misviejos.data.repository.FirestoreTurnoRepository
 import com.xd.misviejos.domain.model.Familia
 import com.xd.misviejos.domain.model.Turno
+import com.xd.misviejos.domain.repository.FamiliaRepository
 import com.xd.misviejos.feature.onboarding.GeneradorOnboardingRoot
 import com.xd.misviejos.feature.timeline.AgendarEventoScreen
+import com.xd.misviejos.feature.timeline.AjustesScreen
 import com.xd.misviejos.feature.timeline.BitacoraScreen
 import com.xd.misviejos.feature.timeline.HistorialScreen
 import com.xd.misviejos.feature.timeline.MiTurnoScreen
@@ -65,11 +67,18 @@ class MainActivity : ComponentActivity() {
         val firestore = FirebaseFirestore.getInstance()
         val familiaRepository = FirestoreFamiliaRepository(firestore)
         setContent {
-            MisViejosTheme {
-                val scope = rememberCoroutineScope()
-                // Escuchamos el DataStore de forma reactiva
-                val sesionActual by sessionManager.sesionFlow.collectAsState(initial = null)
+            val scope = rememberCoroutineScope()
+            // Escuchamos el DataStore de forma reactiva
+            val sesionActual by sessionManager.sesionFlow.collectAsState(initial = null)
+            val darkModePref by sessionManager.darkModeFlow.collectAsState(initial = null)
+            val isSystemDark = isSystemInDarkTheme()
+            val darkTheme = when (darkModePref) {
+                true -> true
+                false -> false
+                null -> isSystemDark
+            }
 
+            MisViejosTheme(darkTheme = darkTheme) {
                 if (sesionActual == null) {
                     GeneradorOnboardingRoot(
                         onBuscarFamilia = { codigoGrupo ->
@@ -143,7 +152,7 @@ class MainActivity : ComponentActivity() {
                     )
                 } else {
                     // [ CASO B: YA TIENEN LLAVE ] -> Les abrimos el chasis pasándole quiénes son
-                    PantallaMaestra(sesionActual!!, sessionManager)
+                    PantallaMaestra(sesionActual!!, sessionManager, familiaRepository)
                 }
             }
         }
@@ -151,21 +160,25 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-fun PantallaMaestra(usuario: UsuarioSesion, sessionManager: SessionManager) {
+fun PantallaMaestra(
+    usuario: UsuarioSesion,
+    sessionManager: SessionManager,
+    familiaRepository: FamiliaRepository
+) {
     // Memoria de la pestaña pisada (Por defecto arranca en "Mi Turno")
     var pestanaActual by remember { mutableStateOf<TabNav>(TabNav.MiTurno) }
-    val items = listOf(TabNav.MiTurno, TabNav.Pista, TabNav.Testigo, TabNav.Archivo)
+    val items = listOf(TabNav.MiTurno, TabNav.Pista, TabNav.Testigo, TabNav.Archivo, TabNav.Ajustes)
     var mostrandoAgendar by remember { mutableStateOf(false) }
     var turnoAEditar by remember { mutableStateOf<Turno?>(null) }
 
     if (mostrandoAgendar || turnoAEditar != null) {
         val firestore = FirebaseFirestore.getInstance()
-        val familiaRepository = FirestoreFamiliaRepository(firestore)
+        val familiaRepositoryInterno = FirestoreFamiliaRepository(firestore)
         val turnoRepository = FirestoreTurnoRepository(firestore)
 
         AgendarEventoScreen(
             familiaId = usuario.groupId,
-            familiaRepository = familiaRepository,
+            familiaRepository = familiaRepositoryInterno,
             turnoRepository = turnoRepository,
             turnoAEditar = turnoAEditar,
             onAtras = {
@@ -190,31 +203,43 @@ fun PantallaMaestra(usuario: UsuarioSesion, sessionManager: SessionManager) {
                 ) {
                     Column {
                         Text(
-                            text = "Nuestros Viejos",
+                            text = when (pestanaActual) {
+                                TabNav.MiTurno -> "Mi Turno"
+                                TabNav.Pista -> "Agenda de Cuidado"
+                                TabNav.Testigo -> "Bitácora Médica"
+                                TabNav.Archivo -> "Historial de Cuidado"
+                                TabNav.Ajustes -> "Ajustes y Preferencias"
+                            },
                             style = MaterialTheme.typography.titleLarge,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.primary
                         )
                         Text(
-                            text = "Hermano: ${usuario.nombreUsuario} (Grupo: ${usuario.groupId})",
+                            text = when (pestanaActual) {
+                                TabNav.MiTurno -> "Labores de ${usuario.nombreUsuario}"
+                                TabNav.Pista -> "Cronograma familiar"
+                                TabNav.Testigo -> "Reportes de los hermanos"
+                                TabNav.Archivo -> "Turnos finalizados"
+                                TabNav.Ajustes -> "Configuración de la app"
+                            },
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
 
-                    val scope = rememberCoroutineScope()
-                    IconButton(
-                        onClick = {
-                            scope.launch {
-                                sessionManager.cerrarSesion()
-                            }
+                    if (pestanaActual == TabNav.Pista && usuario.isAdmin) {
+                        IconButton(
+                            onClick = { mostrandoAgendar = true },
+                            modifier = Modifier
+                                .background(MaterialTheme.colorScheme.primary, RoundedCornerShape(12.dp))
+                                .size(40.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Add,
+                                contentDescription = "Agendar Cuidado",
+                                tint = MaterialTheme.colorScheme.onPrimary
+                            )
                         }
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.ExitToApp,
-                            contentDescription = "Cerrar Sesión",
-                            tint = MaterialTheme.colorScheme.error
-                        )
                     }
                 }
             },
@@ -272,41 +297,16 @@ fun PantallaMaestra(usuario: UsuarioSesion, sessionManager: SessionManager) {
                         turnoRepository = repo
                     )
                 } else if (pestanaActual == TabNav.Pista) {
-                    Column(modifier = Modifier.fillMaxSize()) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                text = "Agenda de Cuidado",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.primary
-                            )
-                            if (usuario.isAdmin) {
-                                IconButton(
-                                    onClick = { mostrandoAgendar = true },
-                                    modifier = Modifier
-                                        .background(MaterialTheme.colorScheme.primary, RoundedCornerShape(12.dp))
-                                        .size(40.dp)
-                                ) {
-                                    Icon(Icons.Default.Add, contentDescription = "Agendar Cuidado", tint = MaterialTheme.colorScheme.onPrimary)
-                                }
-                            }
-                        }
+                    val firestore = FirebaseFirestore.getInstance()
+                    val repo = FirestoreTurnoRepository(firestore)
 
-                        val firestore = FirebaseFirestore.getInstance()
-                        val repo = FirestoreTurnoRepository(firestore)
-
-                        TimelineScreen(
-                            groupId = usuario.groupId,
-                            turnoRepository = repo,
-                            isAdmin = usuario.isAdmin,
-                            onEditarTurno = { turnoAEditar = it },
-                            modifier = Modifier.weight(1f)
-                        )
-                    }
+                    TimelineScreen(
+                        groupId = usuario.groupId,
+                        turnoRepository = repo,
+                        isAdmin = usuario.isAdmin,
+                        onEditarTurno = { turnoAEditar = it },
+                        modifier = Modifier.fillMaxSize()
+                    )
                 } else if (pestanaActual == TabNav.Testigo) {
                     val firestore = FirebaseFirestore.getInstance()
                     val repo = FirestoreTurnoRepository(firestore)
@@ -322,6 +322,12 @@ fun PantallaMaestra(usuario: UsuarioSesion, sessionManager: SessionManager) {
                     HistorialScreen(
                         groupId = usuario.groupId,
                         turnoRepository = repo
+                    )
+                } else if (pestanaActual == TabNav.Ajustes) {
+                    AjustesScreen(
+                        usuario = usuario,
+                        sessionManager = sessionManager,
+                        familiaRepository = familiaRepository
                     )
                 }
             }
@@ -339,7 +345,12 @@ fun PantallaBautizoPreview() {
                 nombreUsuario = "Usuario Preview",
                 isAdmin = true
             ),
-            sessionManager = SessionManager(androidx.compose.ui.platform.LocalContext.current)
+            sessionManager = SessionManager(androidx.compose.ui.platform.LocalContext.current),
+            familiaRepository = object : FamiliaRepository {
+                override suspend fun crearFamilia(familia: Familia) = Result.success(Unit)
+                override suspend fun obtenerFamilia(groupId: String) = Result.success(null)
+                override suspend fun actualizarPins(groupId: String, pins: Map<String, String>) = Result.success(Unit)
+            }
         )
     }
 }

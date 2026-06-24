@@ -42,4 +42,11 @@ sealed class TabNav(
         iconoSeleccionado = Icons.Filled.Folder,
         iconoNoSeleccionado = Icons.Outlined.Folder
     )
+
+    object Ajustes : TabNav(
+        ruta = "ajustes",
+        titulo = "Ajustes",
+        iconoSeleccionado = Icons.Filled.Settings,
+        iconoNoSeleccionado = Icons.Outlined.Settings
+    )
 }

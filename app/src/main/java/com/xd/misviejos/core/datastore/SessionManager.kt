@@ -24,6 +24,7 @@ class SessionManager(private val context: Context) {
         private val KEY_GROUP_ID = stringPreferencesKey("key_group_id")
         private val KEY_USER_NAME = stringPreferencesKey("key_user_name")
         private val KEY_IS_ADMIN = booleanPreferencesKey("key_is_admin")
+        private val KEY_DARK_MODE = booleanPreferencesKey("key_dark_mode")
     }
 
     // El "Río" de datos: Emite null si no hay nadie, o el objeto UsuarioSesion si ya entraron
@@ -35,11 +36,22 @@ class SessionManager(private val context: Context) {
         UsuarioSesion(groupId, nombre, isAdmin)
     }
 
+    // Flujo del Modo Oscuro (null significa usar el del sistema)
+    val darkModeFlow: Flow<Boolean?> = context.dataStore.data.map { preferencias ->
+        preferencias[KEY_DARK_MODE]
+    }
+
     suspend fun guardarSesion(usuario: UsuarioSesion) {
         context.dataStore.edit { preferencias ->
             preferencias[KEY_GROUP_ID] = usuario.groupId
             preferencias[KEY_USER_NAME] = usuario.nombreUsuario
             preferencias[KEY_IS_ADMIN] = usuario.isAdmin
+        }
+    }
+
+    suspend fun guardarModoOscuro(activo: Boolean) {
+        context.dataStore.edit { preferencias ->
+            preferencias[KEY_DARK_MODE] = activo
         }
     }
 
