@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "228017708750",
+    "project_id": "xd-mis-viejos",
+    "storage_bucket": "xd-mis-viejos.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:228017708750:android:c8dc1c1a1a2e7a64f4fa9f",
+        "android_client_info": {
+          "package_name": "com.xd.misviejos"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBmu2dWH2fQ8kGb_YEz0tM3nnuBobAVKFI"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
