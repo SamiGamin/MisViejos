@@ -16,12 +16,11 @@ class FirestoreTurnoRepository(
     private val firestore: FirebaseFirestore
 ) : TurnoRepository {
 
-    // Guardamos todo en una sola colección plana
-    private val coleccion = firestore.collection("turnos_viejos")
+    private fun getColeccion(groupId: String) =
+        firestore.collection("familias").document(groupId).collection("turnos_viejos")
 
     override fun obtenerTurnosFamilia(groupId: String): Flow<List<Turno>> = callbackFlow {
-        val listener = coleccion
-            .whereEqualTo("groupId", groupId)
+        val listener = getColeccion(groupId)
             .orderBy("fecha", Query.Direction.ASCENDING)
             .addSnapshotListener { snapshot, error ->
                 if (error != null) {
@@ -42,14 +41,15 @@ class FirestoreTurnoRepository(
 
     override suspend fun guardarTurno(turno: Turno): Result<Unit> = runCatching {
         val dto = turno.toDTO()
-        val docRef = if (turno.id.isEmpty()) coleccion.document() else coleccion.document(turno.id)
+        val col = getColeccion(turno.groupId)
+        val docRef = if (turno.id.isEmpty()) col.document() else col.document(turno.id)
 
         dto.id = docRef.id
         docRef.set(dto).await() // <-- Requiere el import de kotlinx-coroutines-play-services
     }
 
-    override suspend fun aceptarTurno(turnoId: String, nombreHermano: String): Result<Unit> = runCatching {
-        coleccion.document(turnoId).update(
+    override suspend fun aceptarTurno(groupId: String, turnoId: String, nombreHermano: String): Result<Unit> = runCatching {
+        getColeccion(groupId).document(turnoId).update(
             mapOf(
                 "hermanoConfirmado" to nombreHermano,
                 "estado" to EstadoTurno.CONFIRMADO.name
@@ -57,8 +57,8 @@ class FirestoreTurnoRepository(
         ).await()
     }
 
-    override suspend fun entregarTestigo(turnoId: String, notasDelMedico: String): Result<Unit> = runCatching {
-        coleccion.document(turnoId).update(
+    override suspend fun entregarTestigo(groupId: String, turnoId: String, notasDelMedico: String): Result<Unit> = runCatching {
+        getColeccion(groupId).document(turnoId).update(
             mapOf(
                 "notasDelMedico" to notasDelMedico,
                 "estado" to EstadoTurno.COMPLETADO.name
@@ -68,7 +68,7 @@ class FirestoreTurnoRepository(
 
     override suspend fun sugerirHermano(groupId: String, miembros: List<String>): Result<String> = runCatching {
         if (miembros.isEmpty()) return@runCatching ""
-        val snapshot = coleccion.whereEqualTo("groupId", groupId).get().await()
+        val snapshot = getColeccion(groupId).get().await()
         val conteos = miembros.associateWith { 0 }.toMutableMap()
         snapshot.documents.forEach { doc ->
             val confirmado = doc.getString("hermanoConfirmado")
@@ -78,5 +78,9 @@ class FirestoreTurnoRepository(
         }
         val sugerido = conteos.minByOrNull { it.value }?.key ?: miembros.first()
         sugerido
+    }
+
+    override suspend fun eliminarTurno(groupId: String, turnoId: String): Result<Unit> = runCatching {
+        getColeccion(groupId).document(turnoId).delete().await()
     }
 }

@@ -1,6 +1,7 @@
 package com.xd.misviejos // <-- Ojo: verifica que coincida con tu package real
 
 import android.os.Bundle
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -8,10 +9,18 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Button
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.ExitToApp
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
@@ -27,26 +36,24 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.ui.text.style.TextAlign
-import android.widget.Toast
 import com.google.firebase.firestore.FirebaseFirestore
 import com.xd.misviejos.core.datastore.SessionManager
 import com.xd.misviejos.core.datastore.UsuarioSesion
 import com.xd.misviejos.core.designsystem.MisViejosTheme
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.width
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
 import com.xd.misviejos.core.navigation.TabNav
-import com.xd.misviejos.feature.onboarding.GeneradorOnboardingRoot
-import com.xd.misviejos.domain.model.Familia
 import com.xd.misviejos.data.repository.FirestoreFamiliaRepository
 import com.xd.misviejos.data.repository.FirestoreTurnoRepository
+import com.xd.misviejos.domain.model.Familia
+import com.xd.misviejos.domain.model.Turno
+import com.xd.misviejos.feature.onboarding.GeneradorOnboardingRoot
 import com.xd.misviejos.feature.timeline.AgendarEventoScreen
+import com.xd.misviejos.feature.timeline.BitacoraScreen
+import com.xd.misviejos.feature.timeline.HistorialScreen
+import com.xd.misviejos.feature.timeline.MiTurnoScreen
+import com.xd.misviejos.feature.timeline.TimelineScreen
 import kotlinx.coroutines.launch
 
 
@@ -149,8 +156,9 @@ fun PantallaMaestra(usuario: UsuarioSesion, sessionManager: SessionManager) {
     var pestanaActual by remember { mutableStateOf<TabNav>(TabNav.MiTurno) }
     val items = listOf(TabNav.MiTurno, TabNav.Pista, TabNav.Testigo, TabNav.Archivo)
     var mostrandoAgendar by remember { mutableStateOf(false) }
+    var turnoAEditar by remember { mutableStateOf<Turno?>(null) }
 
-    if (mostrandoAgendar) {
+    if (mostrandoAgendar || turnoAEditar != null) {
         val firestore = FirebaseFirestore.getInstance()
         val familiaRepository = FirestoreFamiliaRepository(firestore)
         val turnoRepository = FirestoreTurnoRepository(firestore)
@@ -159,11 +167,57 @@ fun PantallaMaestra(usuario: UsuarioSesion, sessionManager: SessionManager) {
             familiaId = usuario.groupId,
             familiaRepository = familiaRepository,
             turnoRepository = turnoRepository,
-            onAtras = { mostrandoAgendar = false },
-            onEventoAgendado = { mostrandoAgendar = false }
+            turnoAEditar = turnoAEditar,
+            onAtras = {
+                mostrandoAgendar = false
+                turnoAEditar = null
+            },
+            onEventoAgendado = {
+                mostrandoAgendar = false
+                turnoAEditar = null
+            }
         )
     } else {
         Scaffold(
+            topBar = {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .statusBarsPadding()
+                        .padding(horizontal = 16.dp, vertical = 12.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column {
+                        Text(
+                            text = "Nuestros Viejos",
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                        Text(
+                            text = "Hermano: ${usuario.nombreUsuario} (Grupo: ${usuario.groupId})",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+
+                    val scope = rememberCoroutineScope()
+                    IconButton(
+                        onClick = {
+                            scope.launch {
+                                sessionManager.cerrarSesion()
+                            }
+                        }
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.ExitToApp,
+                            contentDescription = "Cerrar Sesión",
+                            tint = MaterialTheme.colorScheme.error
+                        )
+                    }
+                }
+            },
             bottomBar = {
                 NavigationBar(
                     containerColor = MaterialTheme.colorScheme.surface,
@@ -201,71 +255,76 @@ fun PantallaMaestra(usuario: UsuarioSesion, sessionManager: SessionManager) {
                 }
             }
         ) { innerPadding ->
-
-            // [HABITÁCULO TEMPORAL]: Un Box que cambia su texto según la pestaña que toques
             Box(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(innerPadding)
-                    .background(MaterialTheme.colorScheme.background),
-                contentAlignment = Alignment.Center
+                    .background(MaterialTheme.colorScheme.background)
+                    .padding(horizontal = 16.dp)
             ) {
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(16.dp)
-                ) {
-                    Text(
-                        text = "Cargando módulo:\n[ ${pestanaActual.titulo} ]\nUsuario: ${usuario.nombreUsuario} (${usuario.groupId})",
-                        style = MaterialTheme.typography.titleLarge,
-                        color = MaterialTheme.colorScheme.onBackground,
-                        textAlign = TextAlign.Center
+                if (pestanaActual == TabNav.MiTurno) {
+                    val firestore = FirebaseFirestore.getInstance()
+                    val repo = FirestoreTurnoRepository(firestore)
+
+                    MiTurnoScreen(
+                        groupId = usuario.groupId,
+                        nombreUsuario = usuario.nombreUsuario,
+                        turnoRepository = repo
                     )
-
-                    if (pestanaActual == TabNav.Pista && usuario.isAdmin) {
-                        Button(
-                            onClick = { mostrandoAgendar = true },
-                            shape = RoundedCornerShape(12.dp)
+                } else if (pestanaActual == TabNav.Pista) {
+                    Column(modifier = Modifier.fillMaxSize()) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Icon(Icons.Default.Add, contentDescription = null)
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text("Agendar Evento Médico")
-                        }
-                    }
-
-                    val scope = rememberCoroutineScope()
-                    Button(
-                        onClick = {
-                            scope.launch {
-                                sessionManager.cerrarSesion()
+                            Text(
+                                text = "Agenda de Cuidado",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                            if (usuario.isAdmin) {
+                                IconButton(
+                                    onClick = { mostrandoAgendar = true },
+                                    modifier = Modifier
+                                        .background(MaterialTheme.colorScheme.primary, RoundedCornerShape(12.dp))
+                                        .size(40.dp)
+                                ) {
+                                    Icon(Icons.Default.Add, contentDescription = "Agendar Cuidado", tint = MaterialTheme.colorScheme.onPrimary)
+                                }
                             }
-                        },
-                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
-                        shape = RoundedCornerShape(12.dp)
-                    ) {
-                        Text("Cerrar Sesión")
+                        }
+
+                        val firestore = FirebaseFirestore.getInstance()
+                        val repo = FirestoreTurnoRepository(firestore)
+
+                        TimelineScreen(
+                            groupId = usuario.groupId,
+                            turnoRepository = repo,
+                            isAdmin = usuario.isAdmin,
+                            onEditarTurno = { turnoAEditar = it },
+                            modifier = Modifier.weight(1f)
+                        )
                     }
+                } else if (pestanaActual == TabNav.Testigo) {
+                    val firestore = FirebaseFirestore.getInstance()
+                    val repo = FirestoreTurnoRepository(firestore)
+
+                    BitacoraScreen(
+                        groupId = usuario.groupId,
+                        turnoRepository = repo
+                    )
+                } else if (pestanaActual == TabNav.Archivo) {
+                    val firestore = FirebaseFirestore.getInstance()
+                    val repo = FirestoreTurnoRepository(firestore)
+
+                    HistorialScreen(
+                        groupId = usuario.groupId,
+                        turnoRepository = repo
+                    )
                 }
             }
-        }
-    }
-}
-@Composable
-fun PantallaLoginFalso(sessionManager: SessionManager) {
-    val scope = rememberCoroutineScope()
-    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        Button(onClick = {
-            scope.launch {
-                // Simulamos que Wendy digita su código y entra
-                sessionManager.guardarSesion(
-                    UsuarioSesion(
-                        groupId = "MARTINEZ-2026",
-                        nombreUsuario = "Wendy",
-                        isAdmin = true
-                    )
-                )
-            }
-        }) {
-            Text("Simular entrada de: [ Wendy (Admin) ]")
         }
     }
 }
