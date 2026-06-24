@@ -13,3 +13,5 @@
 .externalNativeBuild
 .cxx
 local.properties
+.mobiai
+plan_implementacion.md
