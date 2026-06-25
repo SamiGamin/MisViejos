@@ -31,6 +31,7 @@ import com.xd.misviejos.domain.model.AccessToken
 import com.xd.misviejos.domain.model.Familia
 import com.xd.misviejos.domain.repository.FamiliaRepository
 import kotlinx.coroutines.launch
+import com.xd.misviejos.core.utils.parseMarkdownToAnnotatedString
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -382,7 +383,7 @@ fun AjustesScreen(
                         if (update.releaseNotes.isNotBlank()) {
                             HorizontalDivider()
                             Text(
-                                text = update.releaseNotes.take(300),
+                                text = parseMarkdownToAnnotatedString(update.releaseNotes.take(300)),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )

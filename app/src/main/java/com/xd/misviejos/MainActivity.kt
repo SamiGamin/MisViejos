@@ -69,6 +69,7 @@ import androidx.compose.runtime.LaunchedEffect
 import kotlinx.coroutines.flow.combine
 import androidx.compose.material3.CircularProgressIndicator
 import kotlinx.coroutines.launch
+import com.xd.misviejos.core.utils.parseMarkdownToAnnotatedString
 
 
 class MainActivity : ComponentActivity() {
@@ -217,7 +218,7 @@ fun PantallaMaestra(
                     if (update.releaseNotes.isNotBlank()) {
                         HorizontalDivider()
                         Text(
-                            text = update.releaseNotes.take(300),
+                            text = parseMarkdownToAnnotatedString(update.releaseNotes.take(300)),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
