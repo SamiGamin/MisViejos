@@ -21,6 +21,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -31,7 +32,6 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.xd.misviejos.R
-import androidx.compose.ui.res.stringResource
 import com.xd.misviejos.domain.model.AccessToken
 import com.xd.misviejos.domain.model.Familia
 import kotlinx.coroutines.launch
@@ -757,8 +757,9 @@ private fun PantallaIngresarPin(
 // ============================================================================
 private fun despacharInvitacionWhatsApp(context: Context, nombreHermano: String, tokenAcceso: String) {
     val linkDescarga = "https://github.com/SamiGamin/MisViejos/releases/latest"
+    val nombreApp = context.getString(R.string.app_name)
     val texto = """
-        👋 ¡Hola $nombreHermano! Te invito a unirte a *Nuestros Viejos*, la app que usamos en familia para coordinar el cuidado de los papás.
+        👋 ¡Hola $nombreHermano! Te invito a unirte a *$nombreApp*, la app que usamos en familia para coordinar el cuidado de los papás.
         
         📲 *Descarga la app aquí:*
         $linkDescarga
