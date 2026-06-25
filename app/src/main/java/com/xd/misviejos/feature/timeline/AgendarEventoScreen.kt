@@ -168,8 +168,9 @@ fun AgendarEventoScreen(
                     .fillMaxSize()
                     .padding(innerPadding)
                     .background(MaterialTheme.colorScheme.background)
-                    .padding(horizontal = 24.dp)
+                    .imePadding()
                     .verticalScroll(scrollState)
+                    .padding(horizontal = 24.dp)
             ) {
                 Text(
                     text = if (turnoAEditar != null) "Editar Cuidado" else "Agendar Cuidado",

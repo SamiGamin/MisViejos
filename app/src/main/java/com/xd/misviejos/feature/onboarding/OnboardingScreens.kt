@@ -314,8 +314,9 @@ private fun PantallaFundarFamilia(
         modifier = Modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
-            .padding(horizontal = 24.dp)
+            .imePadding()
             .verticalScroll(scrollState)
+            .padding(horizontal = 24.dp)
     ) {
         Spacer(modifier = Modifier.height(16.dp))
 
@@ -591,8 +592,9 @@ private fun PantallaRegistrarPin(
         modifier = Modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
-            .padding(24.dp)
+            .imePadding()
             .verticalScroll(rememberScrollState())
+            .padding(24.dp)
     ) {
         IconButton(onClick = onAtras, modifier = Modifier.offset(x = (-12).dp)) {
             Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Volver")
@@ -676,8 +678,9 @@ private fun PantallaIngresarPin(
         modifier = Modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
-            .padding(24.dp)
+            .imePadding()
             .verticalScroll(rememberScrollState())
+            .padding(24.dp)
     ) {
         IconButton(onClick = onAtras, modifier = Modifier.offset(x = (-12).dp)) {
             Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Volver")
