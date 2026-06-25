@@ -17,4 +17,5 @@ interface FamiliaRepository {
     suspend fun obtenerAccessToken(token: String): Result<AccessToken?>
     suspend fun actualizarAccessTokenPin(token: String, pin: String): Result<Unit>
     suspend fun obtenerTokensDeFamilia(groupId: String): Result<List<AccessToken>>
+    suspend fun actualizarRolToken(token: String, nuevoRol: String): Result<Unit>
 }

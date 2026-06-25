@@ -133,14 +133,14 @@ class MainActivity : ComponentActivity() {
                             onRegistrarPin = { token, pin ->
                                 familiaRepository.actualizarAccessTokenPin(token, pin)
                             },
-                            onLoginExitoso = { token, groupId, nombreUsuario, isAdmin ->
+                            onLoginExitoso = { token, groupId, nombreUsuario, rol ->
                                 scope.launch {
                                     sessionManager.guardarLastToken(token)
                                     sessionManager.guardarSesion(
                                         UsuarioSesion(
                                             groupId = groupId,
                                             nombreUsuario = nombreUsuario,
-                                            isAdmin = isAdmin
+                                            rol = rol
                                         )
                                     )
                                 }
@@ -324,7 +324,7 @@ fun PantallaMaestra(
                         )
                     }
 
-                    if (pestanaActual == TabNav.Pista && usuario.isAdmin) {
+                    if (pestanaActual == TabNav.Pista && (usuario.rol == "OWNER" || usuario.rol == "CO_ADMIN")) {
                         IconButton(
                             onClick = { mostrandoAgendar = true },
                             modifier = Modifier
@@ -402,7 +402,7 @@ fun PantallaMaestra(
                         TimelineScreen(
                             groupId = usuario.groupId,
                             turnoRepository = repo,
-                            isAdmin = usuario.isAdmin,
+                            isAdmin = usuario.rol == "OWNER" || usuario.rol == "CO_ADMIN",
                             onEditarTurno = { turnoAEditar = it },
                             modifier = Modifier.fillMaxSize()
                         )
@@ -446,7 +446,7 @@ fun PantallaBautizoPreview() {
             usuario = UsuarioSesion(
                 groupId = "PREVIEW-123",
                 nombreUsuario = "Usuario Preview",
-                isAdmin = true
+                rol = "OWNER"
             ),
             sessionManager = SessionManager(androidx.compose.ui.platform.LocalContext.current),
             familiaRepository = object : FamiliaRepository {
@@ -462,6 +462,7 @@ fun PantallaBautizoPreview() {
                 override suspend fun obtenerAccessToken(token: String) = Result.success(null)
                 override suspend fun actualizarAccessTokenPin(token: String, pin: String) = Result.success(Unit)
                 override suspend fun obtenerTokensDeFamilia(groupId: String) = Result.success(emptyList<AccessToken>())
+                override suspend fun actualizarRolToken(token: String, nuevoRol: String) = Result.success(Unit)
             }
         )
     }

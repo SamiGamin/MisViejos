@@ -15,8 +15,10 @@ private val Context.dataStore by preferencesDataStore(name = "sesion_nuestros_vi
 data class UsuarioSesion(
     val groupId: String,
     val nombreUsuario: String,
-    val isAdmin: Boolean
-)
+    val rol: String
+) {
+    val isAdmin: Boolean get() = rol == "OWNER" || rol == "CO_ADMIN"
+}
 
 class SessionManager(private val context: Context) {
 
@@ -24,6 +26,7 @@ class SessionManager(private val context: Context) {
         private val KEY_GROUP_ID = stringPreferencesKey("key_group_id")
         private val KEY_USER_NAME = stringPreferencesKey("key_user_name")
         private val KEY_IS_ADMIN = booleanPreferencesKey("key_is_admin")
+        private val KEY_ROL = stringPreferencesKey("key_rol")
         private val KEY_DARK_MODE = booleanPreferencesKey("key_dark_mode")
         private val KEY_LAST_TOKEN = stringPreferencesKey("key_last_token")
     }
@@ -32,9 +35,9 @@ class SessionManager(private val context: Context) {
     val sesionFlow: Flow<UsuarioSesion?> = context.dataStore.data.map { preferencias ->
         val groupId = preferencias[KEY_GROUP_ID] ?: return@map null
         val nombre = preferencias[KEY_USER_NAME] ?: return@map null
-        val isAdmin = preferencias[KEY_IS_ADMIN] ?: false
+        val rol = preferencias[KEY_ROL] ?: if (preferencias[KEY_IS_ADMIN] == true) "OWNER" else "MEMBER"
 
-        UsuarioSesion(groupId, nombre, isAdmin)
+        UsuarioSesion(groupId, nombre, rol)
     }
 
     // Flujo del Modo Oscuro (null significa usar el del sistema)
@@ -51,6 +54,7 @@ class SessionManager(private val context: Context) {
         context.dataStore.edit { preferencias ->
             preferencias[KEY_GROUP_ID] = usuario.groupId
             preferencias[KEY_USER_NAME] = usuario.nombreUsuario
+            preferencias[KEY_ROL] = usuario.rol
             preferencias[KEY_IS_ADMIN] = usuario.isAdmin
         }
     }
@@ -78,6 +82,7 @@ class SessionManager(private val context: Context) {
             preferencias.remove(KEY_GROUP_ID)
             preferencias.remove(KEY_USER_NAME)
             preferencias.remove(KEY_IS_ADMIN)
+            preferencias.remove(KEY_ROL)
         }
     }
 }

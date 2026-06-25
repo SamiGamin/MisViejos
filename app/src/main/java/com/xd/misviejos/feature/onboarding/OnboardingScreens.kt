@@ -52,7 +52,7 @@ fun GeneradorOnboardingRoot(
     onLimpiarLastToken: () -> Unit,
     onBuscarToken: suspend (String) -> AccessToken?,
     onRegistrarPin: suspend (String, String) -> Result<Unit>,
-    onLoginExitoso: (token: String, groupId: String, nombreUsuario: String, isAdmin: Boolean) -> Unit,
+    onLoginExitoso: (token: String, groupId: String, nombreUsuario: String, rol: String) -> Unit,
     onFundarFamilia: suspend (codigoGenerado: String, adminNombre: String, pin: String, papa: String, mama: String, hermanos: List<String>) -> Result<List<AccessToken>>
 ) {
     var vistaActual by remember { 
@@ -146,9 +146,9 @@ fun GeneradorOnboardingRoot(
                         PantallaMostrarTokensGenesis(
                             tokens = tokensGenerados,
                             onComenzar = {
-                                val adminToken = tokensGenerados.find { it.rol == "ADMIN" }
-                                if (adminToken != null) {
-                                    onLoginExitoso(adminToken.token, adminToken.groupId, adminToken.nombreUsuario, true)
+                                val ownerToken = tokensGenerados.find { it.rol == "OWNER" }
+                                if (ownerToken != null) {
+                                    onLoginExitoso(ownerToken.token, ownerToken.groupId, ownerToken.nombreUsuario, "OWNER")
                                 }
                             }
                         )
@@ -165,7 +165,7 @@ fun GeneradorOnboardingRoot(
                                 scope.launch {
                                     val res = onRegistrarPin(tokenSeleccionado!!.token, pin)
                                     res.onSuccess {
-                                        onLoginExitoso(tokenSeleccionado!!.token, tokenSeleccionado!!.groupId, tokenSeleccionado!!.nombreUsuario, tokenSeleccionado!!.rol == "ADMIN")
+                                        onLoginExitoso(tokenSeleccionado!!.token, tokenSeleccionado!!.groupId, tokenSeleccionado!!.nombreUsuario, tokenSeleccionado!!.rol)
                                     }.onFailure {
                                         snackbarHostState.showSnackbar("Error al registrar PIN: ${it.message}")
                                     }
@@ -182,7 +182,7 @@ fun GeneradorOnboardingRoot(
                                 vistaActual = PasoOnboarding.BIFURCACION
                             },
                             onConfirmar = {
-                                onLoginExitoso(tokenSeleccionado!!.token, tokenSeleccionado!!.groupId, tokenSeleccionado!!.nombreUsuario, tokenSeleccionado!!.rol == "ADMIN")
+                                onLoginExitoso(tokenSeleccionado!!.token, tokenSeleccionado!!.groupId, tokenSeleccionado!!.nombreUsuario, tokenSeleccionado!!.rol)
                             }
                         )
                     }
@@ -474,8 +474,8 @@ private fun PantallaMostrarTokensGenesis(
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
     val scrollState = rememberScrollState()
-    val adminToken = remember(tokens) { tokens.find { it.rol == "ADMIN" } }
-    val hermanosTokens = remember(tokens) { tokens.filter { it.rol == "HERMANO" } }
+    val adminToken = remember(tokens) { tokens.find { it.rol == "OWNER" } }
+    val hermanosTokens = remember(tokens) { tokens.filter { it.rol == "MEMBER" } }
 
     Column(
         modifier = Modifier

@@ -47,7 +47,7 @@ class FirestoreFamiliaRepository(
         // 3. Crear tokens para nuevos hermanos
         nuevosHermanos.filter { it.isNotBlank() }.forEach { nombreHermano ->
             val tokenHermano = TokenGenerator.nuevoToken(nombreHermano)
-            val hermanoDTO = AccessTokenDTO(tokenHermano, familia.groupId, nombreHermano, "HERMANO", null)
+            val hermanoDTO = AccessTokenDTO(tokenHermano, familia.groupId, nombreHermano, "MEMBER", null)
             val refHermano = firestore.collection("access_tokens").document(tokenHermano)
             batch.set(refHermano, hermanoDTO)
         }
@@ -105,7 +105,7 @@ class FirestoreFamiliaRepository(
 
         // 2. Generar y escribir el Token del Administrador (Nace reclamado y con PIN)
         val tokenAdmin = TokenGenerator.nuevoToken(familia.adminNombre)
-        val adminDTO = AccessTokenDTO(tokenAdmin, grupoId, familia.adminNombre, "ADMIN", familia.pin)
+        val adminDTO = AccessTokenDTO(tokenAdmin, grupoId, familia.adminNombre, "OWNER", familia.pin)
         val refAdmin = firestore.collection("access_tokens").document(tokenAdmin)
         batch.set(refAdmin, adminDTO)
         listaTokensGenerados.add(adminDTO.toDomain())
@@ -113,7 +113,7 @@ class FirestoreFamiliaRepository(
         // 3. Generar y escribir los Tokens de los hermanos (Nacen vírgenes, pin = null)
         hermanosNombres.filter { it.isNotBlank() }.forEach { nombreHermano ->
             val tokenHermano = TokenGenerator.nuevoToken(nombreHermano)
-            val hermanoDTO = AccessTokenDTO(tokenHermano, grupoId, nombreHermano, "HERMANO", null)
+            val hermanoDTO = AccessTokenDTO(tokenHermano, grupoId, nombreHermano, "MEMBER", null)
             val refHermano = firestore.collection("access_tokens").document(tokenHermano)
             
             batch.set(refHermano, hermanoDTO)
@@ -161,5 +161,9 @@ class FirestoreFamiliaRepository(
         snap.documents.map { doc ->
             doc.toObject(AccessTokenDTO::class.java)!!.toDomain()
         }
+    }
+
+    override suspend fun actualizarRolToken(token: String, nuevoRol: String): Result<Unit> = runCatching {
+        firestore.collection("access_tokens").document(token).update("rol", nuevoRol).await()
     }
 }

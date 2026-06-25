@@ -17,6 +17,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -149,10 +150,18 @@ fun AjustesScreen(
                             color = MaterialTheme.colorScheme.onSurface
                         )
                         Text(
-                            text = if (usuario.isAdmin) "Administrador de la Familia" else "Hermano / Cuidador",
+                            text = when (usuario.rol) {
+                                "OWNER" -> "Administrador Principal (Owner)"
+                                "CO_ADMIN" -> "Co-Administrador"
+                                else -> "Hermano / Cuidador"
+                            },
                             fontWeight = FontWeight.SemiBold,
                             style = MaterialTheme.typography.labelSmall,
-                            color = if (usuario.isAdmin) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.secondary
+                            color = when (usuario.rol) {
+                                "OWNER" -> MaterialTheme.colorScheme.primary
+                                "CO_ADMIN" -> MaterialTheme.colorScheme.secondary
+                                else -> MaterialTheme.colorScheme.onSurfaceVariant
+                            }
                         )
                     }
                 }
@@ -493,7 +502,11 @@ fun AjustesScreen(
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
                         Text(
-                            text = "${familiaOriginal!!.adminNombre} (Tú - Creador)",
+                            text = if (usuario.nombreUsuario == familiaOriginal!!.adminNombre) {
+                                "${familiaOriginal!!.adminNombre} (Tú - Dueño)"
+                            } else {
+                                "${familiaOriginal!!.adminNombre} (Dueño/Owner)"
+                            },
                             fontWeight = FontWeight.Bold,
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onPrimaryContainer
@@ -530,6 +543,54 @@ fun AjustesScreen(
                                         style = MaterialTheme.typography.labelSmall,
                                         color = if (tokenAsociado.pin == null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.secondary
                                     )
+                                    
+                                    // Visualización de Co-Admin según rol
+                                    if (usuario.rol == "OWNER") {
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                            modifier = Modifier.padding(top = 4.dp)
+                                        ) {
+                                            val esCoAdmin = tokenAsociado.rol == "CO_ADMIN"
+                                            Text(
+                                                text = "Co-Administrador",
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                            Switch(
+                                                checked = esCoAdmin,
+                                                onCheckedChange = { check ->
+                                                    val nuevoRol = if (check) "CO_ADMIN" else "MEMBER"
+                                                    scope.launch {
+                                                        val res = familiaRepository.actualizarRolToken(tokenAsociado.token, nuevoRol)
+                                                        res.onSuccess {
+                                                            tokensList = tokensList.map {
+                                                                if (it.token == tokenAsociado.token) it.copy(rol = nuevoRol) else it
+                                                            }
+                                                            Toast.makeText(context, "Rol de $hermano cambiado a $nuevoRol", Toast.LENGTH_SHORT).show()
+                                                        }.onFailure {
+                                                            Toast.makeText(context, "Error al actualizar: ${it.message}", Toast.LENGTH_LONG).show()
+                                                        }
+                                                    }
+                                                },
+                                                modifier = Modifier.scale(0.7f)
+                                            )
+                                        }
+                                    } else if (tokenAsociado.rol == "CO_ADMIN") {
+                                        Spacer(modifier = Modifier.height(4.dp))
+                                        Box(
+                                            modifier = Modifier
+                                                .background(MaterialTheme.colorScheme.secondaryContainer, RoundedCornerShape(4.dp))
+                                                .padding(horizontal = 6.dp, vertical = 2.dp)
+                                        ) {
+                                            Text(
+                                                text = "Co-Administrador",
+                                                style = MaterialTheme.typography.labelSmall,
+                                                fontWeight = FontWeight.Bold,
+                                                color = MaterialTheme.colorScheme.onSecondaryContainer
+                                            )
+                                        }
+                                    }
                                 } else {
                                     Text(
                                         text = "(Nuevo - Se creará pase al guardar)",
@@ -557,52 +618,56 @@ fun AjustesScreen(
                                         )
                                     }
                                 }
-                                IconButton(
-                                    onClick = { hermanosList.remove(hermano) },
-                                    modifier = Modifier.size(32.dp)
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Delete,
-                                        contentDescription = "Eliminar",
-                                        tint = MaterialTheme.colorScheme.error,
-                                        modifier = Modifier.size(16.dp)
-                                    )
+                                if (usuario.rol == "OWNER") {
+                                    IconButton(
+                                        onClick = { hermanosList.remove(hermano) },
+                                        modifier = Modifier.size(32.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Delete,
+                                            contentDescription = "Eliminar",
+                                            tint = MaterialTheme.colorScheme.error,
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                    }
                                 }
                             }
                         }
                     }
                 }
 
-                // Campo para agregar un nuevo hermano
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    OutlinedTextField(
-                        value = nuevoHermanoInput,
-                        onValueChange = { nuevoHermanoInput = it },
-                        placeholder = { Text("Nombre del nuevo hermano") },
-                        singleLine = true,
-                        shape = RoundedCornerShape(12.dp),
-                        modifier = Modifier.weight(1f)
-                    )
-                    Button(
-                        onClick = {
-                            if (nuevoHermanoInput.isNotBlank()) {
-                                val nombreLimpio = nuevoHermanoInput.trim()
-                                if (nombreLimpio == familiaOriginal!!.adminNombre || hermanosList.contains(nombreLimpio)) {
-                                    Toast.makeText(context, "Ese nombre ya existe.", Toast.LENGTH_SHORT).show()
-                                } else {
-                                    hermanosList.add(nombreLimpio)
-                                    nuevoHermanoInput = ""
-                                }
-                            }
-                        },
-                        shape = RoundedCornerShape(12.dp),
-                        contentPadding = PaddingValues(horizontal = 16.dp)
+                // Campo para agregar un nuevo hermano (Solo Owner)
+                if (usuario.rol == "OWNER") {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text("Añadir")
+                        OutlinedTextField(
+                            value = nuevoHermanoInput,
+                            onValueChange = { nuevoHermanoInput = it },
+                            placeholder = { Text("Nombre del nuevo hermano") },
+                            singleLine = true,
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier.weight(1f)
+                        )
+                        Button(
+                            onClick = {
+                                if (nuevoHermanoInput.isNotBlank()) {
+                                    val nombreLimpio = nuevoHermanoInput.trim()
+                                    if (nombreLimpio == familiaOriginal!!.adminNombre || hermanosList.contains(nombreLimpio)) {
+                                        Toast.makeText(context, "Ese nombre ya existe.", Toast.LENGTH_SHORT).show()
+                                    } else {
+                                        hermanosList.add(nombreLimpio)
+                                        nuevoHermanoInput = ""
+                                    }
+                                }
+                            },
+                            shape = RoundedCornerShape(12.dp),
+                            contentPadding = PaddingValues(horizontal = 16.dp)
+                        ) {
+                            Text("Añadir")
+                        }
                     }
                 }
 
