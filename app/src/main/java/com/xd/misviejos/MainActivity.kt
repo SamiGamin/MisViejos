@@ -197,6 +197,22 @@ fun PantallaMaestra(
         if (update != null) updateDisponible = update
     }
 
+    // Sincronizar el rol del usuario en segundo plano desde Firestore
+    LaunchedEffect(usuario) {
+        sessionManager.lastTokenFlow.collect { token ->
+            if (token != null) {
+                val res = familiaRepository.obtenerAccessToken(token)
+                res.onSuccess { accessToken ->
+                    if (accessToken != null && accessToken.rol != usuario.rol) {
+                        sessionManager.guardarSesion(
+                            usuario.copy(rol = accessToken.rol)
+                        )
+                    }
+                }
+            }
+        }
+    }
+
     // ── Diálogo flotante de actualización (aparece sobre cualquier pantalla) ──
     updateDisponible?.let { update ->
         AlertDialog(
