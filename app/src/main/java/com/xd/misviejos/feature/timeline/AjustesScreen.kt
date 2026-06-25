@@ -168,12 +168,23 @@ fun AjustesScreen(
                 Spacer(modifier = Modifier.height(12.dp))
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant, thickness = 0.5.dp)
                 Spacer(modifier = Modifier.height(12.dp))
-                Text(
-                    text = "Código de la Tribu: ${usuario.groupId}",
-                    fontWeight = FontWeight.Bold,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+                val lastToken by sessionManager.lastTokenFlow.collectAsState(initial = null)
+                
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text(
+                        text = "Código de la Tribu: ${usuario.groupId}",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    if (!lastToken.isNullOrBlank()) {
+                        Text(
+                            text = "Mi Pase de Invitación: $lastToken",
+                            fontWeight = FontWeight.Bold,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                }
             }
         }
 
@@ -751,7 +762,7 @@ fun AjustesScreen(
 
                 Spacer(modifier = Modifier.height(8.dp))
 
-                val hermanosTokens = tokensList.filter { it.rol == "HERMANO" }
+                val hermanosTokens = tokensList.filter { it.rol == "MEMBER" }
 
                 if (hermanosTokens.isEmpty()) {
                     Text(

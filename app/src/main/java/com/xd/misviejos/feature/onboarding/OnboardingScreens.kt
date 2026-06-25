@@ -157,7 +157,6 @@ fun GeneradorOnboardingRoot(
                         PantallaRegistrarPin(
                             token = tokenSeleccionado!!,
                             onAtras = {
-                                onLimpiarLastToken()
                                 tokenSeleccionado = null
                                 vistaActual = PasoOnboarding.BIFURCACION
                             },
@@ -177,7 +176,6 @@ fun GeneradorOnboardingRoot(
                         PantallaIngresarPin(
                             token = tokenSeleccionado!!,
                             onAtras = {
-                                onLimpiarLastToken()
                                 tokenSeleccionado = null
                                 vistaActual = PasoOnboarding.BIFURCACION
                             },
@@ -599,7 +597,7 @@ private fun PantallaRegistrarPin(
             .padding(24.dp)
     ) {
         IconButton(onClick = onAtras, modifier = Modifier.offset(x = (-12).dp)) {
-            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Volver")
+//            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Volver")
         }
 
         Text("Crear tu PIN de acceso", style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.primary)
@@ -684,9 +682,9 @@ private fun PantallaIngresarPin(
             .verticalScroll(rememberScrollState())
             .padding(24.dp)
     ) {
-        IconButton(onClick = onAtras, modifier = Modifier.offset(x = (-12).dp)) {
-            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Volver")
-        }
+//        IconButton(onClick = onAtras, modifier = Modifier.offset(x = (-12).dp)) {
+////            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Volver")
+//        }
 
         Text("Ingresar PIN", style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.primary)
         Text("Hola ${token.nombreUsuario}, digita tu PIN de seguridad de 4 dígitos.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)

@@ -97,8 +97,8 @@ fun AgendarEventoScreen(
         res.onSuccess { familia ->
             if (familia != null) {
                 val list = mutableListOf<String>()
-                if (familia.papa.isNotBlank()) list.add("Papá (${familia.papa})")
-                if (familia.mama.isNotBlank()) list.add("Mamá (${familia.mama})")
+                if (familia.papa.isNotBlank()) list.add(familia.papa)
+                if (familia.mama.isNotBlank()) list.add(familia.mama)
                 viejosOptions = list
                 if (list.isNotEmpty()) {
                     pacienteSeleccionado = list.first()
