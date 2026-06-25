@@ -1,3 +1,51 @@
 <resources>
-    <string name="app_name">Mis Viejos</string>
+    <string name="app_name">Registro Medico</string>
+
+    <!-- Common Actions -->
+    <string name="action_save">Guardar</string>
+    <string name="action_cancel">Cancelar</string>
+    <string name="action_add">Agregar</string>
+    <string name="action_edit">Editar</string>
+    <string name="action_delete">Eliminar</string>
+    <string name="action_back">Volver</string>
+
+    <!-- Dialogs and Messages -->
+    <string name="delete_confirmation">¿Está seguro de que desea eliminar este registro?</string>
+    <string name="error_required_field">Este campo es obligatorio</string>
+    <string name="success_saved">Guardado exitosamente</string>
+    <string name="yes">Sí</string>
+    <string name="no">No</string>
+
+    <!-- Medical Record Fields -->
+    <string name="label_date">Fecha</string>
+    <string name="label_time">Hora</string>
+    <string name="label_notes">Notas</string>
+    <string name="label_blood_pressure">Presión Arterial</string>
+    <string name="label_glucose">Glucosa</string>
+    <string name="label_weight">Peso</string>
+    <string name="label_temperature">Temperatura</string>
+    <string name="label_oxygen">Oxigenación</string>
+    <string name="label_heart_rate">Frecuencia Cardíaca</string>
+
+    <!-- Units -->
+    <string name="unit_blood_pressure">mmHg</string>
+    <string name="unit_glucose">mg/dL</string>
+    <string name="unit_weight">kg</string>
+    <string name="unit_temperature">°C</string>
+    <string name="unit_oxygen">%</string>
+    <string name="unit_heart_rate">bpm</string>
+
+    <!-- Screen Titles -->
+    <string name="title_home">Inicio</string>
+    <string name="title_add_record">Nuevo Registro</string>
+    <string name="title_edit_record">Editar Registro</string>
+    <string name="title_history">Historial</string>
+    <string name="title_settings">Configuración</string>
+    <string name="title_profile">Perfil</string>
+
+    <!-- Settings -->
+    <string name="setting_dark_mode">Modo Oscuro</string>
+    <string name="setting_language">Idioma</string>
+    <string name="setting_notifications">Notificaciones</string>
+
 </resources>

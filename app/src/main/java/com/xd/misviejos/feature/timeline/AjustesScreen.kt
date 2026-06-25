@@ -25,6 +25,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.xd.misviejos.core.datastore.SessionManager
 import com.xd.misviejos.core.datastore.UsuarioSesion
+import com.xd.misviejos.core.updater.AppUpdater
+import com.xd.misviejos.core.updater.UpdateInfo
 import com.xd.misviejos.domain.model.AccessToken
 import com.xd.misviejos.domain.model.Familia
 import com.xd.misviejos.domain.repository.FamiliaRepository
@@ -63,7 +65,7 @@ fun AjustesScreen(
     val isDarkActive = when (darkModePref) {
         true -> true
         false -> false
-        null -> false // por defecto ligero si no hay valor local
+        null -> true // modo oscuro por defecto
     }
 
     // 2. Estado para el diálogo de edición de familia (Admin únicamente)
@@ -284,6 +286,132 @@ fun AjustesScreen(
         }
 
         Spacer(modifier = Modifier.height(24.dp))
+
+        // --- SECCIÓN 5: ACTUALIZACIONES ---
+        Text(
+            text = "ACTUALIZACIONES",
+            style = MaterialTheme.typography.labelSmall,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.padding(bottom = 8.dp)
+        )
+
+        val updater = remember { AppUpdater(context) }
+        var buscandoUpdate by remember { mutableStateOf(false) }
+        var updateDisponible by remember { mutableStateOf<UpdateInfo?>(null) }
+        var descargando by remember { mutableStateOf(false) }
+        var progresoDescarga by remember { mutableStateOf(0) }
+        var mensajeUpdate by remember { mutableStateOf<String?>(null) }
+
+        Card(
+            shape = RoundedCornerShape(24.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+            modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)
+        ) {
+            Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                // Mostrar barra de progreso si se está descargando
+                if (descargando) {
+                    Text(
+                        text = "Descargando actualización... $progresoDescarga%",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    LinearProgressIndicator(
+                        progress = { progresoDescarga / 100f },
+                        modifier = Modifier.fillMaxWidth(),
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                } else {
+                    mensajeUpdate?.let {
+                        Text(
+                            text = it,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.secondary
+                        )
+                    }
+                    OutlinedButton(
+                        onClick = {
+                            scope.launch {
+                                buscandoUpdate = true
+                                mensajeUpdate = null
+                                val update = updater.verificarActualizacion()
+                                buscandoUpdate = false
+                                if (update != null) {
+                                    updateDisponible = update
+                                } else {
+                                    mensajeUpdate = "✅ La app está actualizada (v$versionName)"
+                                }
+                            }
+                        },
+                        enabled = !buscandoUpdate,
+                        shape = RoundedCornerShape(12.dp),
+                        border = BorderStroke(1.5.dp, MaterialTheme.colorScheme.primary),
+                        modifier = Modifier.fillMaxWidth().height(44.dp)
+                    ) {
+                        if (buscandoUpdate) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(16.dp),
+                                strokeWidth = 2.dp,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Buscando...")
+                        } else {
+                            Icon(Icons.Default.SystemUpdate, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Buscar Actualización", fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+            }
+        }
+
+        // Diálogo de confirmación de actualización
+        updateDisponible?.let { update ->
+            AlertDialog(
+                onDismissRequest = { updateDisponible = null },
+                icon = { Icon(Icons.Default.SystemUpdate, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
+                title = { Text("🎉 Actualización disponible", fontWeight = FontWeight.Bold) },
+                text = {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text(
+                            text = "Versión ${update.versionName} lista para instalar.",
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                        if (update.releaseNotes.isNotBlank()) {
+                            HorizontalDivider()
+                            Text(
+                                text = update.releaseNotes.take(300),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            val updateCapturado = update
+                            updateDisponible = null
+                            descargando = true
+                            progresoDescarga = 0
+                            scope.launch {
+                                updater.descargarEInstalar(updateCapturado) { progreso ->
+                                    progresoDescarga = progreso
+                                }
+                                descargando = false
+                            }
+                        }
+                    ) { Text("Descargar e Instalar") }
+                },
+                dismissButton = {
+                    TextButton(onClick = { updateDisponible = null }) { Text("Ahora no") }
+                }
+            )
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
         Text(
             text = "Versión $versionName ($versionCode)",
             style = MaterialTheme.typography.labelSmall,
@@ -626,11 +754,17 @@ fun AjustesScreen(
 }
 
 private fun despacharInvitacionWhatsApp(context: Context, nombreHermano: String, tokenAcceso: String) {
+    val linkDescarga = "https://github.com/SamiGamin/MisViejos/releases/latest"
     val texto = """
-        ¡Hola $nombreHermano! Descarga la app de la familia para coordinar el cuidado de los papás.
+        👋 ¡Hola $nombreHermano! Te invito a unirte a *Nuestros Viejos*, la app que usamos en familia para coordinar el cuidado de los papás.
         
-        Tu pase único de entrada directa es:
-        👉 *$tokenAcceso*
+        📲 *Descarga la app aquí:*
+        $linkDescarga
+        
+        Una vez instalada, ingresa con tu pase único:
+        🗙 *Tu Pase: $tokenAcceso*
+        
+        La app te pedirá crear un PIN personal de 4 dígitos la primera vez. 🔐
     """.trimIndent()
 
     val intent = Intent(Intent.ACTION_SEND).apply {

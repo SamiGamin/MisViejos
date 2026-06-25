@@ -751,11 +751,17 @@ private fun PantallaIngresarPin(
 // FUNCIONES AUXILIARES
 // ============================================================================
 private fun despacharInvitacionWhatsApp(context: Context, nombreHermano: String, tokenAcceso: String) {
+    val linkDescarga = "https://github.com/SamiGamin/MisViejos/releases/latest"
     val texto = """
-        ¡Hola $nombreHermano! Descarga la app de la familia para coordinar el cuidado de los papás.
+        👋 ¡Hola $nombreHermano! Te invito a unirte a *Nuestros Viejos*, la app que usamos en familia para coordinar el cuidado de los papás.
         
-        Tu pase único de entrada directa es:
-        👉 *$tokenAcceso*
+        📲 *Descarga la app aquí:*
+        $linkDescarga
+        
+        Una vez instalada, ingresa con tu pase único:
+        🔑 *Tu Pase: $tokenAcceso*
+        
+        La app te pedirá crear un PIN personal de 4 dígitos la primera vez. 🔐
     """.trimIndent()
 
     val intent = Intent(Intent.ACTION_SEND).apply {

@@ -38,11 +38,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.platform.LocalContext
 import com.google.firebase.firestore.FirebaseFirestore
 import com.xd.misviejos.core.datastore.SessionManager
 import com.xd.misviejos.core.datastore.UsuarioSesion
 import com.xd.misviejos.core.designsystem.MisViejosTheme
 import com.xd.misviejos.core.navigation.TabNav
+import com.xd.misviejos.core.updater.AppUpdater
+import com.xd.misviejos.core.updater.UpdateInfo
 import com.xd.misviejos.data.repository.FirestoreFamiliaRepository
 import com.xd.misviejos.data.repository.FirestoreTurnoRepository
 import com.xd.misviejos.domain.model.AccessToken
@@ -56,6 +59,13 @@ import com.xd.misviejos.feature.timeline.BitacoraScreen
 import com.xd.misviejos.feature.timeline.HistorialScreen
 import com.xd.misviejos.feature.timeline.MiTurnoScreen
 import com.xd.misviejos.feature.timeline.TimelineScreen
+import androidx.compose.material.icons.filled.SystemUpdate
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.LaunchedEffect
 import kotlinx.coroutines.flow.combine
 import androidx.compose.material3.CircularProgressIndicator
 import kotlinx.coroutines.launch
@@ -71,7 +81,7 @@ class MainActivity : ComponentActivity() {
         setContent {
             val scope = rememberCoroutineScope()
             // Escuchamos el DataStore de forma reactiva
-            val darkModePref by sessionManager.darkModeFlow.collectAsState(initial = null)
+            val darkModePref by sessionManager.darkModeFlow.collectAsState(initial = true)
             
             // Unificamos el cargado del estado inicial del DataStore para evitar parpadeos
             val estadoInicialFlow = remember {
@@ -172,6 +182,90 @@ fun PantallaMaestra(
     val items = listOf(TabNav.MiTurno, TabNav.Pista, TabNav.Testigo, TabNav.Archivo, TabNav.Ajustes)
     var mostrandoAgendar by remember { mutableStateOf(false) }
     var turnoAEditar by remember { mutableStateOf<Turno?>(null) }
+
+    // ── Detección automática de actualizaciones al abrir la app ──
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val updater = remember { AppUpdater(context) }
+    var updateDisponible by remember { mutableStateOf<UpdateInfo?>(null) }
+    var descargando by remember { mutableStateOf(false) }
+    var progresoDescarga by remember { mutableStateOf(0) }
+
+    LaunchedEffect(Unit) {
+        val update = updater.verificarActualizacion()
+        if (update != null) updateDisponible = update
+    }
+
+    // ── Diálogo flotante de actualización (aparece sobre cualquier pantalla) ──
+    updateDisponible?.let { update ->
+        AlertDialog(
+            onDismissRequest = { updateDisponible = null },
+            icon = {
+                Icon(
+                    imageVector = Icons.Default.SystemUpdate,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary
+                )
+            },
+            title = { Text("🎉 Actualización disponible", fontWeight = FontWeight.Bold) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        text = "Versión ${update.versionName} lista para instalar.",
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                    if (update.releaseNotes.isNotBlank()) {
+                        HorizontalDivider()
+                        Text(
+                            text = update.releaseNotes.take(300),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    if (descargando) {
+                        LinearProgressIndicator(
+                            progress = { progresoDescarga / 100f },
+                            modifier = Modifier.fillMaxWidth(),
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                        Text(
+                            text = "Descargando... $progresoDescarga%",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        if (!descargando) {
+                            val updateCapturado = update
+                            updateDisponible = null
+                            descargando = true
+                            progresoDescarga = 0
+                            scope.launch {
+                                updater.descargarEInstalar(updateCapturado) { progreso ->
+                                    progresoDescarga = progreso
+                                }
+                                descargando = false
+                            }
+                        }
+                    },
+                    enabled = !descargando
+                ) {
+                    if (descargando) {
+                        CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                    } else {
+                        Text("Descargar e Instalar")
+                    }
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { updateDisponible = null }) { Text("Ahora no") }
+            }
+        )
+    }
 
     if (mostrandoAgendar || turnoAEditar != null) {
         val firestore = FirebaseFirestore.getInstance()
