@@ -1,6 +1,6 @@
-# Nuestros Viejos (Mis Viejos) 👵👴
+# Registro Medico 👵👴
 
-**Nuestros Viejos** es una aplicación móvil para Android diseñada para coordinar las labores de cuidado y acompañamiento de adultos mayores (padres o abuelos) dentro del núcleo familiar. La aplicación permite organizar turnos, llevar una bitácora médica compartida en tiempo real y gestionar la información de la tribu familiar sin necesidad de servidores externos.
+**Registro Medico** es una aplicación móvil para Android diseñada para coordinar las labores de cuidado y acompañamiento de adultos mayores (padres o abuelos) dentro del núcleo familiar. La aplicación permite organizar turnos, llevar una bitácora médica compartida en tiempo real y gestionar la información de la tribu familiar sin necesidad de servidores externos.
 
 ---
 

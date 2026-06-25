@@ -23,6 +23,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.xd.misviejos.R
 import com.xd.misviejos.core.datastore.SessionManager
 import com.xd.misviejos.core.datastore.UsuarioSesion
 import com.xd.misviejos.core.updater.AppUpdater
@@ -757,14 +758,15 @@ fun AjustesScreen(
 
 private fun despacharInvitacionWhatsApp(context: Context, nombreHermano: String, tokenAcceso: String) {
     val linkDescarga = "https://github.com/SamiGamin/MisViejos/releases/latest"
+    val nombreApp = context.getString(R.string.app_name)
     val texto = """
-        👋 ¡Hola $nombreHermano! Te invito a unirte a *Nuestros Viejos*, la app que usamos en familia para coordinar el cuidado de los papás.
+        👋 ¡Hola $nombreHermano! Te invito a unirte a *$nombreApp*, la app que usamos en familia para coordinar el cuidado de los papás.
         
         📲 *Descarga la app aquí:*
         $linkDescarga
         
         Una vez instalada, ingresa con tu pase único:
-        🗙 *Tu Pase: $tokenAcceso*
+        🔑 *Tu Pase: $tokenAcceso*
         
         La app te pedirá crear un PIN personal de 4 dígitos la primera vez. 🔐
     """.trimIndent()

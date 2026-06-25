@@ -25,6 +25,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.xd.misviejos.R
 import com.xd.misviejos.data.repository.TurnoRepository
 import com.xd.misviejos.domain.model.EstadoTurno
 import com.xd.misviejos.domain.model.Turno
@@ -247,8 +248,9 @@ private fun BitacoraItem(
 private fun compartirEnWhatsApp(context: Context, turno: Turno) {
     val localDateTime = LocalDateTime.ofInstant(turno.fechaInstante, ZoneId.systemDefault())
     val formatter = DateTimeFormatter.ofPattern("dd/MM/yyyy hh:mm a")
+    val appName = context.getString(R.string.app_name)
     val texto = """
-        *Resumen de Cuidado Médico - Nuestros Viejos* 👵👴
+        *Resumen de Cuidado Médico - ${appName}* 👵👴
         
         *Paciente:* ${turno.paciente}
         *Evento:* ${turno.especialidad}
@@ -260,7 +262,7 @@ private fun compartirEnWhatsApp(context: Context, turno: Turno) {
         *Reporte del Médico / Notas:*
         "${turno.notasDelMedico}"
         
-        _Enviado desde la App Nuestros Viejos_ 📲
+        _Enviado desde la App ${appName}_ 📲
     """.trimIndent()
 
     val sendIntent = Intent().apply {
