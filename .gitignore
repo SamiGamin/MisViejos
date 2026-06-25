@@ -15,3 +15,6 @@
 local.properties
 .mobiai
 plan_implementacion.md
+# Keystore - NUNCA subir a GitHub
+keystore.jks
+*.keystore

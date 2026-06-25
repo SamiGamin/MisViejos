@@ -1,7 +1,6 @@
 package com.xd.misviejos // <-- Ojo: verifica que coincida con tu package real
 
 import android.os.Bundle
-import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -46,6 +45,7 @@ import com.xd.misviejos.core.designsystem.MisViejosTheme
 import com.xd.misviejos.core.navigation.TabNav
 import com.xd.misviejos.data.repository.FirestoreFamiliaRepository
 import com.xd.misviejos.data.repository.FirestoreTurnoRepository
+import com.xd.misviejos.domain.model.AccessToken
 import com.xd.misviejos.domain.model.Familia
 import com.xd.misviejos.domain.model.Turno
 import com.xd.misviejos.domain.repository.FamiliaRepository
@@ -56,6 +56,8 @@ import com.xd.misviejos.feature.timeline.BitacoraScreen
 import com.xd.misviejos.feature.timeline.HistorialScreen
 import com.xd.misviejos.feature.timeline.MiTurnoScreen
 import com.xd.misviejos.feature.timeline.TimelineScreen
+import kotlinx.coroutines.flow.combine
+import androidx.compose.material3.CircularProgressIndicator
 import kotlinx.coroutines.launch
 
 
@@ -69,8 +71,19 @@ class MainActivity : ComponentActivity() {
         setContent {
             val scope = rememberCoroutineScope()
             // Escuchamos el DataStore de forma reactiva
-            val sesionActual by sessionManager.sesionFlow.collectAsState(initial = null)
             val darkModePref by sessionManager.darkModeFlow.collectAsState(initial = null)
+            
+            // Unificamos el cargado del estado inicial del DataStore para evitar parpadeos
+            val estadoInicialFlow = remember {
+                combine(
+                    sessionManager.sesionFlow,
+                    sessionManager.lastTokenFlow
+                ) { sesion, token ->
+                    Pair(sesion, token)
+                }
+            }
+            val estadoInicial by estadoInicialFlow.collectAsState(initial = null)
+
             val isSystemDark = isSystemInDarkTheme()
             val darkTheme = when (darkModePref) {
                 true -> true
@@ -79,53 +92,49 @@ class MainActivity : ComponentActivity() {
             }
 
             MisViejosTheme(darkTheme = darkTheme) {
-                if (sesionActual == null) {
-                    GeneradorOnboardingRoot(
-                        onBuscarFamilia = { codigoGrupo ->
-                            val res = familiaRepository.obtenerFamilia(codigoGrupo)
-                            res.getOrNull()
-                        },
-                        onFamiliaUnida = { codigoGrupo, nombreHermano, pin, esRegistro ->
-                            scope.launch {
-                                val resFamilia = familiaRepository.obtenerFamilia(codigoGrupo)
-                                resFamilia.onSuccess { familia ->
-                                    if (familia != null) {
-                                        val esAdmin = nombreHermano == familia.adminNombre
-                                        if (esRegistro) {
-                                            val nuevosPins = familia.pins.toMutableMap().apply {
-                                                put(nombreHermano, pin)
-                                            }
-                                            val resUpdate = familiaRepository.actualizarPins(codigoGrupo, nuevosPins)
-                                            resUpdate.onSuccess {
-                                                sessionManager.guardarSesion(
-                                                    UsuarioSesion(
-                                                        groupId = codigoGrupo,
-                                                        nombreUsuario = nombreHermano,
-                                                        isAdmin = esAdmin
-                                                    )
-                                                )
-                                            }.onFailure {
-                                                Toast.makeText(applicationContext, "Error al registrar PIN: ${it.message}", Toast.LENGTH_LONG).show()
-                                            }
-                                        } else {
-                                            sessionManager.guardarSesion(
-                                                UsuarioSesion(
-                                                    groupId = codigoGrupo,
-                                                    nombreUsuario = nombreHermano,
-                                                    isAdmin = esAdmin
-                                                )
-                                            )
-                                        }
-                                    } else {
-                                        Toast.makeText(applicationContext, "La familia $codigoGrupo no existe", Toast.LENGTH_LONG).show()
-                                    }
-                                }.onFailure {
-                                    Toast.makeText(applicationContext, "Error: ${it.message}", Toast.LENGTH_LONG).show()
+                val estado = estadoInicial
+                if (estado == null) {
+                    // Pantalla de carga mientras se leen las preferencias de sesión
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(MaterialTheme.colorScheme.background),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        CircularProgressIndicator(
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                } else {
+                    val (sesionActual, lastToken) = estado
+                    if (sesionActual == null) {
+                        GeneradorOnboardingRoot(
+                            lastToken = lastToken,
+                            onLimpiarLastToken = {
+                                scope.launch {
+                                    sessionManager.borrarLastToken()
                                 }
-                            }
-                        },
-                        onFamiliaFundada = { codigoGenerado, adminNombre, pin, papa, mama, hermanos ->
-                            scope.launch {
+                            },
+                            onBuscarToken = { token ->
+                                val res = familiaRepository.obtenerAccessToken(token)
+                                res.getOrNull()
+                            },
+                            onRegistrarPin = { token, pin ->
+                                familiaRepository.actualizarAccessTokenPin(token, pin)
+                            },
+                            onLoginExitoso = { token, groupId, nombreUsuario, isAdmin ->
+                                scope.launch {
+                                    sessionManager.guardarLastToken(token)
+                                    sessionManager.guardarSesion(
+                                        UsuarioSesion(
+                                            groupId = groupId,
+                                            nombreUsuario = nombreUsuario,
+                                            isAdmin = isAdmin
+                                        )
+                                    )
+                                }
+                            },
+                            onFundarFamilia = { codigoGenerado, adminNombre, pin, papa, mama, hermanos ->
                                 val nuevaFamilia = Familia(
                                     groupId = codigoGenerado,
                                     adminNombre = adminNombre,
@@ -135,24 +144,17 @@ class MainActivity : ComponentActivity() {
                                     hermanos = hermanos,
                                     pins = mapOf(adminNombre to pin)
                                 )
-                                val res = familiaRepository.crearFamilia(nuevaFamilia)
-                                res.onSuccess {
-                                    sessionManager.guardarSesion(
-                                        UsuarioSesion(
-                                            groupId = codigoGenerado,
-                                            nombreUsuario = adminNombre,
-                                            isAdmin = true
-                                        )
-                                    )
-                                }.onFailure {
-                                    Toast.makeText(applicationContext, "Error al guardar familia: ${it.message}", Toast.LENGTH_LONG).show()
-                                }
+                                familiaRepository.fundarFamiliaConTokens(
+                                    grupoId = codigoGenerado,
+                                    familia = nuevaFamilia,
+                                    hermanosNombres = hermanos
+                                )
                             }
-                        }
-                    )
-                } else {
-                    // [ CASO B: YA TIENEN LLAVE ] -> Les abrimos el chasis pasándole quiénes son
-                    PantallaMaestra(sesionActual!!, sessionManager, familiaRepository)
+                        )
+                    } else {
+                        // [ CASO B: YA TIENEN LLAVE ] -> Les abrimos el chasis pasándole quiénes son
+                        PantallaMaestra(sesionActual, sessionManager, familiaRepository)
+                    }
                 }
             }
         }
@@ -287,48 +289,54 @@ fun PantallaMaestra(
                     .background(MaterialTheme.colorScheme.background)
                     .padding(horizontal = 16.dp)
             ) {
-                if (pestanaActual == TabNav.MiTurno) {
-                    val firestore = FirebaseFirestore.getInstance()
-                    val repo = FirestoreTurnoRepository(firestore)
+                when (pestanaActual) {
+                    TabNav.MiTurno -> {
+                        val firestore = FirebaseFirestore.getInstance()
+                        val repo = FirestoreTurnoRepository(firestore)
 
-                    MiTurnoScreen(
-                        groupId = usuario.groupId,
-                        nombreUsuario = usuario.nombreUsuario,
-                        turnoRepository = repo
-                    )
-                } else if (pestanaActual == TabNav.Pista) {
-                    val firestore = FirebaseFirestore.getInstance()
-                    val repo = FirestoreTurnoRepository(firestore)
+                        MiTurnoScreen(
+                            groupId = usuario.groupId,
+                            nombreUsuario = usuario.nombreUsuario,
+                            turnoRepository = repo
+                        )
+                    }
+                    TabNav.Pista -> {
+                        val firestore = FirebaseFirestore.getInstance()
+                        val repo = FirestoreTurnoRepository(firestore)
 
-                    TimelineScreen(
-                        groupId = usuario.groupId,
-                        turnoRepository = repo,
-                        isAdmin = usuario.isAdmin,
-                        onEditarTurno = { turnoAEditar = it },
-                        modifier = Modifier.fillMaxSize()
-                    )
-                } else if (pestanaActual == TabNav.Testigo) {
-                    val firestore = FirebaseFirestore.getInstance()
-                    val repo = FirestoreTurnoRepository(firestore)
+                        TimelineScreen(
+                            groupId = usuario.groupId,
+                            turnoRepository = repo,
+                            isAdmin = usuario.isAdmin,
+                            onEditarTurno = { turnoAEditar = it },
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    }
+                    TabNav.Testigo -> {
+                        val firestore = FirebaseFirestore.getInstance()
+                        val repo = FirestoreTurnoRepository(firestore)
 
-                    BitacoraScreen(
-                        groupId = usuario.groupId,
-                        turnoRepository = repo
-                    )
-                } else if (pestanaActual == TabNav.Archivo) {
-                    val firestore = FirebaseFirestore.getInstance()
-                    val repo = FirestoreTurnoRepository(firestore)
+                        BitacoraScreen(
+                            groupId = usuario.groupId,
+                            turnoRepository = repo
+                        )
+                    }
+                    TabNav.Archivo -> {
+                        val firestore = FirebaseFirestore.getInstance()
+                        val repo = FirestoreTurnoRepository(firestore)
 
-                    HistorialScreen(
-                        groupId = usuario.groupId,
-                        turnoRepository = repo
-                    )
-                } else if (pestanaActual == TabNav.Ajustes) {
-                    AjustesScreen(
-                        usuario = usuario,
-                        sessionManager = sessionManager,
-                        familiaRepository = familiaRepository
-                    )
+                        HistorialScreen(
+                            groupId = usuario.groupId,
+                            turnoRepository = repo
+                        )
+                    }
+                    TabNav.Ajustes -> {
+                        AjustesScreen(
+                            usuario = usuario,
+                            sessionManager = sessionManager,
+                            familiaRepository = familiaRepository
+                        )
+                    }
                 }
             }
         }
@@ -350,6 +358,15 @@ fun PantallaBautizoPreview() {
                 override suspend fun crearFamilia(familia: Familia) = Result.success(Unit)
                 override suspend fun obtenerFamilia(groupId: String) = Result.success(null)
                 override suspend fun actualizarPins(groupId: String, pins: Map<String, String>) = Result.success(Unit)
+                override suspend fun fundarFamiliaConTokens(
+                    grupoId: String,
+                    familia: Familia,
+                    hermanosNombres: List<String>
+                ) = Result.success(emptyList<AccessToken>())
+
+                override suspend fun obtenerAccessToken(token: String) = Result.success(null)
+                override suspend fun actualizarAccessTokenPin(token: String, pin: String) = Result.success(Unit)
+                override suspend fun obtenerTokensDeFamilia(groupId: String) = Result.success(emptyList<AccessToken>())
             }
         )
     }

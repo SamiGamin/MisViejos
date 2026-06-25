@@ -25,6 +25,7 @@ class SessionManager(private val context: Context) {
         private val KEY_USER_NAME = stringPreferencesKey("key_user_name")
         private val KEY_IS_ADMIN = booleanPreferencesKey("key_is_admin")
         private val KEY_DARK_MODE = booleanPreferencesKey("key_dark_mode")
+        private val KEY_LAST_TOKEN = stringPreferencesKey("key_last_token")
     }
 
     // El "Río" de datos: Emite null si no hay nadie, o el objeto UsuarioSesion si ya entraron
@@ -41,6 +42,11 @@ class SessionManager(private val context: Context) {
         preferencias[KEY_DARK_MODE]
     }
 
+    // Flujo del último pase recordado
+    val lastTokenFlow: Flow<String?> = context.dataStore.data.map { preferencias ->
+        preferencias[KEY_LAST_TOKEN]
+    }
+
     suspend fun guardarSesion(usuario: UsuarioSesion) {
         context.dataStore.edit { preferencias ->
             preferencias[KEY_GROUP_ID] = usuario.groupId
@@ -55,7 +61,23 @@ class SessionManager(private val context: Context) {
         }
     }
 
+    suspend fun guardarLastToken(token: String) {
+        context.dataStore.edit { preferencias ->
+            preferencias[KEY_LAST_TOKEN] = token
+        }
+    }
+
+    suspend fun borrarLastToken() {
+        context.dataStore.edit { preferencias ->
+            preferencias.remove(KEY_LAST_TOKEN)
+        }
+    }
+
     suspend fun cerrarSesion() {
-        context.dataStore.edit { it.clear() }
+        context.dataStore.edit { preferencias ->
+            preferencias.remove(KEY_GROUP_ID)
+            preferencias.remove(KEY_USER_NAME)
+            preferencias.remove(KEY_IS_ADMIN)
+        }
     }
 }

@@ -1,5 +1,7 @@
 package com.xd.misviejos.feature.timeline
 
+import android.content.Context
+import android.content.Intent
 import android.widget.Toast
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -23,6 +25,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.xd.misviejos.core.datastore.SessionManager
 import com.xd.misviejos.core.datastore.UsuarioSesion
+import com.xd.misviejos.domain.model.AccessToken
 import com.xd.misviejos.domain.model.Familia
 import com.xd.misviejos.domain.repository.FamiliaRepository
 import kotlinx.coroutines.launch
@@ -39,6 +42,22 @@ fun AjustesScreen(
     val scope = rememberCoroutineScope()
     val scrollState = rememberScrollState()
 
+    // Obtener la información de versión de la aplicación
+    val packageInfo = remember(context) {
+        runCatching {
+            context.packageManager.getPackageInfo(context.packageName, 0)
+        }.getOrNull()
+    }
+    val versionName = packageInfo?.versionName ?: "1.0.0"
+    val versionCode = packageInfo?.let {
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P) {
+            it.longVersionCode
+        } else {
+            @Suppress("DEPRECATION")
+            it.versionCode.toLong()
+        }
+    } ?: 1L
+
     // 1. Estados de preferencias locales
     val darkModePref by sessionManager.darkModeFlow.collectAsState(initial = null)
     val isDarkActive = when (darkModePref) {
@@ -49,6 +68,7 @@ fun AjustesScreen(
 
     // 2. Estado para el diálogo de edición de familia (Admin únicamente)
     var mostrarEditFamilia by remember { mutableStateOf(false) }
+    var mostrarInvitaciones by remember { mutableStateOf(false) }
     var familiaOriginal by remember { mutableStateOf<Familia?>(null) }
 
     // Campos de edición de familia
@@ -56,10 +76,11 @@ fun AjustesScreen(
     var mamaInput by remember { mutableStateOf("") }
     val hermanosList = remember { mutableStateListOf<String>() }
     var nuevoHermanoInput by remember { mutableStateOf("") }
+    var tokensList by remember { mutableStateOf<List<AccessToken>>(emptyList()) }
 
-    // Cargar datos de la familia si se abre la edición
-    LaunchedEffect(mostrarEditFamilia) {
-        if (mostrarEditFamilia) {
+    // Cargar datos de la familia si se abre la edición o invitaciones
+    LaunchedEffect(mostrarEditFamilia, mostrarInvitaciones) {
+        if (mostrarEditFamilia || mostrarInvitaciones) {
             val res = familiaRepository.obtenerFamilia(usuario.groupId)
             res.onSuccess { familia ->
                 if (familia != null) {
@@ -68,10 +89,17 @@ fun AjustesScreen(
                     mamaInput = familia.mama
                     hermanosList.clear()
                     hermanosList.addAll(familia.hermanos)
+
+                    // Cargar tokens de la familia
+                    val resTokens = familiaRepository.obtenerTokensDeFamilia(usuario.groupId)
+                    resTokens.onSuccess { lista ->
+                        tokensList = lista
+                    }
                 }
             }.onFailure {
                 Toast.makeText(context, "Error al cargar familia: ${it.message}", Toast.LENGTH_LONG).show()
                 mostrarEditFamilia = false
+                mostrarInvitaciones = false
             }
         }
     }
@@ -218,6 +246,16 @@ fun AjustesScreen(
                         Spacer(modifier = Modifier.width(8.dp))
                         Text("Editar Datos de la Familia", fontWeight = FontWeight.Bold)
                     }
+                    OutlinedButton(
+                        onClick = { mostrarInvitaciones = true },
+                        shape = RoundedCornerShape(12.dp),
+                        border = BorderStroke(1.5.dp, MaterialTheme.colorScheme.primary),
+                        modifier = Modifier.fillMaxWidth().height(44.dp)
+                    ) {
+                        Icon(Icons.Default.Share, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Invitar Hermanos (Compartir Pases)", fontWeight = FontWeight.Bold)
+                    }
                 }
             }
         }
@@ -244,6 +282,15 @@ fun AjustesScreen(
             Spacer(modifier = Modifier.width(8.dp))
             Text("Cerrar Sesión", fontSize = 16.sp, fontWeight = FontWeight.Bold)
         }
+
+        Spacer(modifier = Modifier.height(24.dp))
+        Text(
+            text = "Versión $versionName ($versionCode)",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+            textAlign = TextAlign.Center,
+            modifier = Modifier.fillMaxWidth()
+        )
     }
 
     // --- DIÁLOGO DE EDICIÓN DE FAMILIA (Bottom Sheet) ---
@@ -338,21 +385,58 @@ fun AjustesScreen(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
-                            Text(
-                                text = hermano,
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-                            IconButton(
-                                onClick = { hermanosList.remove(hermano) },
-                                modifier = Modifier.size(24.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Delete,
-                                    contentDescription = "Eliminar",
-                                    tint = MaterialTheme.colorScheme.error,
-                                    modifier = Modifier.size(16.dp)
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = hermano,
+                                    fontWeight = FontWeight.Bold,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurface
                                 )
+                                val tokenAsociado = tokensList.find { it.nombreUsuario == hermano }
+                                if (tokenAsociado != null) {
+                                    Text(
+                                        text = "Pase: ${tokenAsociado.token} (${if (tokenAsociado.pin == null) "🔑 PIN sin configurar" else "✓ PIN activo"})",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = if (tokenAsociado.pin == null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.secondary
+                                    )
+                                } else {
+                                    Text(
+                                        text = "(Nuevo - Se creará pase al guardar)",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                val tokenAsociado = tokensList.find { it.nombreUsuario == hermano }
+                                if (tokenAsociado != null) {
+                                    IconButton(
+                                        onClick = { despacharInvitacionWhatsApp(context, hermano, tokenAsociado.token) },
+                                        modifier = Modifier.size(32.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Share,
+                                            contentDescription = "Compartir Pase",
+                                            tint = MaterialTheme.colorScheme.secondary,
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                    }
+                                }
+                                IconButton(
+                                    onClick = { hermanosList.remove(hermano) },
+                                    modifier = Modifier.size(32.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Delete,
+                                        contentDescription = "Eliminar",
+                                        tint = MaterialTheme.colorScheme.error,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                }
                             }
                         }
                     }
@@ -436,5 +520,128 @@ fun AjustesScreen(
                 Spacer(modifier = Modifier.height(24.dp))
             }
         }
+    }
+
+    // --- NUEVO DIÁLOGO DE INVITACIONES / COMPARTIR PASES (Bottom Sheet) ---
+    val sheetInvitacionesState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+
+    if (mostrarInvitaciones && familiaOriginal != null) {
+        ModalBottomSheet(
+            onDismissRequest = { mostrarInvitaciones = false },
+            sheetState = sheetInvitacionesState,
+            dragHandle = { BottomSheetDefaults.DragHandle() },
+            containerColor = MaterialTheme.colorScheme.surface
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .navigationBarsPadding()
+                    .padding(horizontal = 24.dp, vertical = 16.dp)
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                Text(
+                    text = "Compartir Pases de Acceso",
+                    fontWeight = FontWeight.Bold,
+                    style = MaterialTheme.typography.titleLarge,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+
+                Text(
+                    text = "Envía invitaciones a tus hermanos para que puedan entrar a la aplicación directamente con su pase personalizado.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                val hermanosTokens = tokensList.filter { it.rol == "HERMANO" }
+
+                if (hermanosTokens.isEmpty()) {
+                    Text(
+                        text = "Aún no has agregado hermanos. Puedes agregarlos usando la opción 'Editar Datos de la Familia'.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 16.dp),
+                        textAlign = TextAlign.Center
+                    )
+                } else {
+                    Column(verticalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
+                        hermanosTokens.forEach { hermanoToken ->
+                            Card(
+                                shape = RoundedCornerShape(16.dp),
+                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)),
+                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(16.dp).fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            text = hermanoToken.nombreUsuario,
+                                            fontWeight = FontWeight.Bold,
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            color = MaterialTheme.colorScheme.onSurface
+                                        )
+                                        Text(
+                                            text = "Pase: ${hermanoToken.token} (${if (hermanoToken.pin == null) "🔑 PIN sin registrar" else "✓ Registrado"})",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = if (hermanoToken.pin == null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.secondary
+                                        )
+                                    }
+
+                                    Button(
+                                        onClick = { despacharInvitacionWhatsApp(context, hermanoToken.nombreUsuario, hermanoToken.token) },
+                                        shape = RoundedCornerShape(10.dp),
+                                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
+                                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
+                                    ) {
+                                        Icon(Icons.Default.Share, contentDescription = null, modifier = Modifier.size(16.dp))
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text("Compartir", style = MaterialTheme.typography.labelMedium)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                Button(
+                    onClick = { mostrarInvitaciones = false },
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier.fillMaxWidth().height(48.dp)
+                ) {
+                    Text("Listo", fontWeight = FontWeight.Bold)
+                }
+
+                Spacer(modifier = Modifier.height(24.dp))
+            }
+        }
+    }
+}
+
+private fun despacharInvitacionWhatsApp(context: Context, nombreHermano: String, tokenAcceso: String) {
+    val texto = """
+        ¡Hola $nombreHermano! Descarga la app de la familia para coordinar el cuidado de los papás.
+        
+        Tu pase único de entrada directa es:
+        👉 *$tokenAcceso*
+    """.trimIndent()
+
+    val intent = Intent(Intent.ACTION_SEND).apply {
+        type = "text/plain"
+        putExtra(Intent.EXTRA_TEXT, texto)
+        setPackage("com.whatsapp")
+    }
+
+    runCatching {
+        context.startActivity(intent)
+    }.onFailure {
+        context.startActivity(Intent.createChooser(intent, "Enviar código por..."))
     }
 }

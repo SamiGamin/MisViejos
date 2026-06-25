@@ -1,53 +1,24 @@
 package com.xd.misviejos.feature.onboarding
 
+import android.content.Context
+import android.content.Intent
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.offset
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.FamilyRestroom
 import androidx.compose.material.icons.filled.Key
-import androidx.compose.material.icons.filled.Person
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedCard
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SnackbarHost
-import androidx.compose.material3.SnackbarHostState
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateListOf
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
+import androidx.compose.material.icons.filled.Share
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -59,22 +30,59 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.xd.misviejos.domain.model.AccessToken
 import com.xd.misviejos.domain.model.Familia
 import kotlinx.coroutines.launch
 
 // --- ESTADO INTERNO DEL ARCHIVO ---
-private enum class PasoOnboarding { BIFURCACION, FUNDAR_WIZARD, SELECCIONAR_HERMANO }
+private enum class PasoOnboarding {
+    CARGANDO,
+    BIFURCACION,
+    FUNDAR_WIZARD,
+    MOSTRAR_TOKENS_GENESIS,
+    INGRESAR_PIN,
+    REGISTRAR_PIN
+}
 
 @Composable
 fun GeneradorOnboardingRoot(
-    onBuscarFamilia: suspend (String) -> Familia?,
-    onFamiliaUnida: (codigoGrupo: String, nombreHermano: String, pin: String, esRegistro: Boolean) -> Unit,
-    onFamiliaFundada: (codigoGenerado: String, adminNombre: String, pin: String, papa: String, mama: String, hermanos: List<String>) -> Unit
+    lastToken: String?,
+    onLimpiarLastToken: () -> Unit,
+    onBuscarToken: suspend (String) -> AccessToken?,
+    onRegistrarPin: suspend (String, String) -> Result<Unit>,
+    onLoginExitoso: (token: String, groupId: String, nombreUsuario: String, isAdmin: Boolean) -> Unit,
+    onFundarFamilia: suspend (codigoGenerado: String, adminNombre: String, pin: String, papa: String, mama: String, hermanos: List<String>) -> Result<List<AccessToken>>
 ) {
-    var vistaActual by remember { mutableStateOf(PasoOnboarding.BIFURCACION) }
-    var familiaSeleccionada by remember { mutableStateOf<Familia?>(null) }
+    var vistaActual by remember { 
+        mutableStateOf(
+            if (lastToken.isNullOrBlank()) PasoOnboarding.BIFURCACION else PasoOnboarding.CARGANDO
+        ) 
+    }
+    var tokenSeleccionado by remember { mutableStateOf<AccessToken?>(null) }
+    var tokensGenerados by remember { mutableStateOf<List<AccessToken>>(emptyList()) }
+
     val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
+
+    // LaunchedEffect para iniciar sesión automáticamente si existe un lastToken
+    LaunchedEffect(lastToken) {
+        if (!lastToken.isNullOrBlank()) {
+            vistaActual = PasoOnboarding.CARGANDO
+            val resToken = onBuscarToken(lastToken)
+            if (resToken != null) {
+                tokenSeleccionado = resToken
+                if (resToken.pin == null) {
+                    vistaActual = PasoOnboarding.REGISTRAR_PIN
+                } else {
+                    vistaActual = PasoOnboarding.INGRESAR_PIN
+                }
+            } else {
+                vistaActual = PasoOnboarding.BIFURCACION
+            }
+        } else {
+            vistaActual = PasoOnboarding.BIFURCACION
+        }
+    }
 
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) }
@@ -82,16 +90,34 @@ fun GeneradorOnboardingRoot(
         Box(modifier = Modifier.padding(innerPadding).fillMaxSize()) {
             AnimatedContent(targetState = vistaActual, label = "transicion_onboarding") { vista ->
                 when (vista) {
+                    PasoOnboarding.CARGANDO -> {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(MaterialTheme.colorScheme.background),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            CircularProgressIndicator(
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                    }
                     PasoOnboarding.BIFURCACION -> {
                         PantallaBifurcacion(
-                            onEntrarConCodigo = { codigo ->
+                            onEntrarConToken = { token ->
                                 scope.launch {
-                                    val familia = onBuscarFamilia(codigo)
-                                    if (familia != null) {
-                                        familiaSeleccionada = familia
-                                        vistaActual = PasoOnboarding.SELECCIONAR_HERMANO
+                                    vistaActual = PasoOnboarding.CARGANDO
+                                    val resToken = onBuscarToken(token)
+                                    if (resToken != null) {
+                                        tokenSeleccionado = resToken
+                                        if (resToken.pin == null) {
+                                            vistaActual = PasoOnboarding.REGISTRAR_PIN
+                                        } else {
+                                            vistaActual = PasoOnboarding.INGRESAR_PIN
+                                        }
                                     } else {
-                                        snackbarHostState.showSnackbar("La familia con código $codigo no existe")
+                                        vistaActual = PasoOnboarding.BIFURCACION
+                                        snackbarHostState.showSnackbar("Pase de invitación inválido o no existe.")
                                     }
                                 }
                             },
@@ -101,14 +127,61 @@ fun GeneradorOnboardingRoot(
                     PasoOnboarding.FUNDAR_WIZARD -> {
                         PantallaFundarFamilia(
                             onAtras = { vistaActual = PasoOnboarding.BIFURCACION },
-                            onFinalizarCreacion = onFamiliaFundada
+                            onFinalizarCreacion = { codigoGenerado, adminNombre, pin, papa, mama, hermanos ->
+                                scope.launch {
+                                    val res = onFundarFamilia(codigoGenerado, adminNombre, pin, papa, mama, hermanos)
+                                    res.onSuccess { listaTokens ->
+                                        tokensGenerados = listaTokens
+                                        vistaActual = PasoOnboarding.MOSTRAR_TOKENS_GENESIS
+                                    }.onFailure {
+                                        snackbarHostState.showSnackbar("Error al crear familia: ${it.message}")
+                                    }
+                                }
+                            }
                         )
                     }
-                    PasoOnboarding.SELECCIONAR_HERMANO -> {
-                        PantallaSeleccionarHermano(
-                            familia = familiaSeleccionada!!,
-                            onAtras = { vistaActual = PasoOnboarding.BIFURCACION },
-                            onConfirmar = onFamiliaUnida
+                    PasoOnboarding.MOSTRAR_TOKENS_GENESIS -> {
+                        PantallaMostrarTokensGenesis(
+                            tokens = tokensGenerados,
+                            onComenzar = {
+                                val adminToken = tokensGenerados.find { it.rol == "ADMIN" }
+                                if (adminToken != null) {
+                                    onLoginExitoso(adminToken.token, adminToken.groupId, adminToken.nombreUsuario, true)
+                                }
+                            }
+                        )
+                    }
+                    PasoOnboarding.REGISTRAR_PIN -> {
+                        PantallaRegistrarPin(
+                            token = tokenSeleccionado!!,
+                            onAtras = {
+                                onLimpiarLastToken()
+                                tokenSeleccionado = null
+                                vistaActual = PasoOnboarding.BIFURCACION
+                            },
+                            onConfirmar = { pin ->
+                                scope.launch {
+                                    val res = onRegistrarPin(tokenSeleccionado!!.token, pin)
+                                    res.onSuccess {
+                                        onLoginExitoso(tokenSeleccionado!!.token, tokenSeleccionado!!.groupId, tokenSeleccionado!!.nombreUsuario, tokenSeleccionado!!.rol == "ADMIN")
+                                    }.onFailure {
+                                        snackbarHostState.showSnackbar("Error al registrar PIN: ${it.message}")
+                                    }
+                                }
+                            }
+                        )
+                    }
+                    PasoOnboarding.INGRESAR_PIN -> {
+                        PantallaIngresarPin(
+                            token = tokenSeleccionado!!,
+                            onAtras = {
+                                onLimpiarLastToken()
+                                tokenSeleccionado = null
+                                vistaActual = PasoOnboarding.BIFURCACION
+                            },
+                            onConfirmar = {
+                                onLoginExitoso(tokenSeleccionado!!.token, tokenSeleccionado!!.groupId, tokenSeleccionado!!.nombreUsuario, tokenSeleccionado!!.rol == "ADMIN")
+                            }
                         )
                     }
                 }
@@ -118,15 +191,15 @@ fun GeneradorOnboardingRoot(
 }
 
 // ============================================================================
-// PANTALLA 1: LA BIFURCACIÓN (El Peaje)
+// PANTALLA 1: LA BIFURCACIÓN (Entrar con Token o Crear Familia)
 // ============================================================================
 @Composable
 private fun PantallaBifurcacion(
-    onEntrarConCodigo: (String) -> Unit,
+    onEntrarConToken: (String) -> Unit,
     onHundirCrearFamilia: () -> Unit
 ) {
-    var codigoInput by remember { mutableStateOf("") }
-    val errorCodigo = codigoInput.isNotEmpty() && codigoInput.length < 5
+    var tokenInput by remember { mutableStateOf("") }
+    val errorToken = tokenInput.isNotEmpty() && tokenInput.length < 5
 
     Column(
         modifier = Modifier
@@ -150,27 +223,27 @@ private fun PantallaBifurcacion(
             modifier = Modifier.fillMaxWidth()
         ) {
             Column(modifier = Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                Text("¿Tu familia ya usa la app?", style = MaterialTheme.typography.titleMedium)
+                Text("¿Fuiste invitado a una familia?", style = MaterialTheme.typography.titleMedium)
 
                 OutlinedTextField(
-                    value = codigoInput,
-                    onValueChange = { codigoInput = it.uppercase().trim() },
-                    label = { Text("Código de Familia (Ej: MARTINEZ-412)") },
+                    value = tokenInput,
+                    onValueChange = { tokenInput = it.uppercase().trim() },
+                    label = { Text("Ingresa tu Pase (Ej: ABC-714)") },
                     leadingIcon = { Icon(Icons.Default.Key, contentDescription = null) },
                     singleLine = true,
-                    isError = errorCodigo,
+                    isError = errorToken,
                     keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Characters, imeAction = ImeAction.Go),
                     shape = RoundedCornerShape(16.dp),
                     modifier = Modifier.fillMaxWidth()
                 )
 
                 Button(
-                    onClick = { onEntrarConCodigo(codigoInput) },
-                    enabled = codigoInput.length >= 6,
+                    onClick = { onEntrarConToken(tokenInput) },
+                    enabled = tokenInput.length >= 6,
                     shape = RoundedCornerShape(16.dp),
                     modifier = Modifier.fillMaxWidth().height(56.dp)
                 ) {
-                    Text("Entrar a mi tribu", fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                    Text("Ingresar con mi Pase", fontSize = 16.sp, fontWeight = FontWeight.Bold)
                 }
             }
         }
@@ -198,7 +271,7 @@ private fun PantallaBifurcacion(
                 }
                 Column {
                     Text("Fundar una nueva familia", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
-                    Text("Crea el código para tus hermanos", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text("Crea el espacio y pases para tus hermanos", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
         }
@@ -208,12 +281,12 @@ private fun PantallaBifurcacion(
 }
 
 // ============================================================================
-// PANTALLA 2: EL WIZARD DE FUNDACIÓN (Big Bang)
+// PANTALLA 2: EL WIZARD DE FUNDACIÓN (Crear Familia)
 // ============================================================================
 @Composable
 private fun PantallaFundarFamilia(
     onAtras: () -> Unit,
-    onFinalizarCreacion: (String, String, String, String, String, List<String>) -> Unit
+    onFinalizarCreacion: (codigoGenerado: String, adminNombre: String, pin: String, papa: String, mama: String, hermanos: List<String>) -> Unit
 ) {
     val scrollState = rememberScrollState()
 
@@ -224,10 +297,10 @@ private fun PantallaFundarFamilia(
     var papaNombre by remember { mutableStateOf("") }
     var mamaNombre by remember { mutableStateOf("") }
 
-    // Hermanos (Dinámicos para permitir cambiar la capacidad de hermanos)
+    // Hermanos
     val hermanosList = remember { mutableStateListOf<String>() }
 
-    // [ TRUCO SENIOR ]: El sufijo numérico nace fijo al abrir la pantalla para que no baile al teclear
+    // El sufijo numérico nace fijo para evitar que baile al teclear
     val sufijoFijo = remember { (1000..9999).random() }
 
     val codigoGenerado = remember(apellido) {
@@ -246,7 +319,6 @@ private fun PantallaFundarFamilia(
     ) {
         Spacer(modifier = Modifier.height(16.dp))
 
-        // Botón atrás
         IconButton(onClick = onAtras, modifier = Modifier.offset(x = (-12).dp)) {
             Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Volver")
         }
@@ -256,7 +328,6 @@ private fun PantallaFundarFamilia(
 
         Spacer(modifier = Modifier.height(24.dp))
 
-        // --- PASO 1: IDENTIDAD ---
         Text("1. El Apellido de la tribu", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
         OutlinedTextField(
             value = apellido,
@@ -267,7 +338,6 @@ private fun PantallaFundarFamilia(
             modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
         )
 
-        // BANNER DE CÓDIGO EN VIVO
         if (codigoGenerado.isNotEmpty()) {
             Box(
                 modifier = Modifier.padding(top = 12.dp).fillMaxWidth().clip(RoundedCornerShape(12.dp))
@@ -286,7 +356,6 @@ private fun PantallaFundarFamilia(
 
         Spacer(modifier = Modifier.height(24.dp))
 
-        // --- PASO 2: LOS VIEJOS ---
         Text("2. ¿A quiénes vamos a cuidar?", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth().padding(top = 8.dp)) {
             OutlinedTextField(
@@ -309,7 +378,6 @@ private fun PantallaFundarFamilia(
 
         Spacer(modifier = Modifier.height(24.dp))
 
-        // --- PASO 3: EL ADMINISTRADOR ---
         Text("3. Tus datos de organizador", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth().padding(top = 8.dp)) {
             OutlinedTextField(
@@ -334,7 +402,6 @@ private fun PantallaFundarFamilia(
 
         Spacer(modifier = Modifier.height(24.dp))
 
-        // --- PASO 4: LOS HERMANOS ---
         Row(
             modifier = Modifier.fillMaxWidth().padding(top = 24.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
@@ -377,7 +444,6 @@ private fun PantallaFundarFamilia(
 
         Spacer(modifier = Modifier.height(32.dp))
 
-        // BOTÓN GIGANTE DE FUNDACIÓN
         Button(
             onClick = {
                 val listaHermanos = hermanosList.filter { it.isNotBlank() }
@@ -395,31 +461,131 @@ private fun PantallaFundarFamilia(
     }
 }
 
+// ============================================================================
+// PANTALLA 3: MOSTRAR TOKENS GÉNESIS (Códigos para compartir en WhatsApp)
+// ============================================================================
 @Composable
-private fun PantallaSeleccionarHermano(
-    familia: Familia,
-    onAtras: () -> Unit,
-    onConfirmar: (codigoGrupo: String, nombreHermano: String, pin: String, esRegistro: Boolean) -> Unit
+private fun PantallaMostrarTokensGenesis(
+    tokens: List<AccessToken>,
+    onComenzar: () -> Unit
 ) {
-    val perfiles = remember(familia) {
-        listOf(familia.adminNombre) + familia.hermanos
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val scrollState = rememberScrollState()
+    val adminToken = remember(tokens) { tokens.find { it.rol == "ADMIN" } }
+    val hermanosTokens = remember(tokens) { tokens.filter { it.rol == "HERMANO" } }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background)
+            .padding(horizontal = 24.dp)
+            .verticalScroll(scrollState),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        Spacer(modifier = Modifier.height(24.dp))
+
+        Text(
+            text = "¡Tribu Creada! 🎉",
+            style = MaterialTheme.typography.titleLarge,
+            color = MaterialTheme.colorScheme.primary,
+            fontWeight = FontWeight.Bold
+        )
+        Text(
+            text = "Aquí tienes los pases de invitación únicos para tus hermanos. Compártelos por WhatsApp para que puedan ingresar sin contraseñas complicadas.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center
+        )
+
+        if (adminToken != null) {
+            Card(
+                shape = RoundedCornerShape(20.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text("Tu pase como Administrador:", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(adminToken.nombreUsuario, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyMedium)
+                        Text(adminToken.token, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.titleMedium)
+                    }
+                }
+            }
+        }
+
+        Text(
+            text = "Pases para tus hermanos/cuidadores:",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.align(Alignment.Start)
+        )
+
+        Column(verticalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
+            hermanosTokens.forEach { hermano ->
+                Card(
+                    shape = RoundedCornerShape(20.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier.padding(16.dp).fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(hermano.nombreUsuario, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyMedium)
+                            Text("Pase: ${hermano.token}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                        IconButton(
+                            onClick = { despacharInvitacionWhatsApp(context, hermano.nombreUsuario, hermano.token) },
+                            modifier = Modifier
+                                .background(MaterialTheme.colorScheme.secondary, RoundedCornerShape(12.dp))
+                                .size(40.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Share,
+                                contentDescription = "Compartir por WhatsApp",
+                                tint = MaterialTheme.colorScheme.onSecondary,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        Button(
+            onClick = onComenzar,
+            shape = RoundedCornerShape(16.dp),
+            modifier = Modifier.fillMaxWidth().height(56.dp)
+        ) {
+            Text("Entrar a la app", fontSize = 16.sp, fontWeight = FontWeight.Bold)
+        }
+
+        Spacer(modifier = Modifier.height(32.dp))
     }
-    var perfilSeleccionado by remember { mutableStateOf<String?>(null) }
+}
+
+// ============================================================================
+// PANTALLA 4: REGISTRAR PIN (Para el primer acceso del hermano)
+// ============================================================================
+@Composable
+private fun PantallaRegistrarPin(
+    token: AccessToken,
+    onAtras: () -> Unit,
+    onConfirmar: (String) -> Unit
+) {
     var pinInput by remember { mutableStateOf("") }
     var errorMensaje by remember { mutableStateOf<String?>(null) }
-    var intentosFallidos by remember { mutableStateOf(0) }
-
-    val tienePin = remember(perfilSeleccionado, familia.pins) {
-        perfilSeleccionado != null && (familia.pins.containsKey(perfilSeleccionado) || (perfilSeleccionado == familia.adminNombre && familia.pin.isNotEmpty()))
-    }
-
-    val pinCorrecto = remember(perfilSeleccionado, familia) {
-        if (perfilSeleccionado == familia.adminNombre) {
-            familia.pins[familia.adminNombre] ?: familia.pin
-        } else {
-            familia.pins[perfilSeleccionado]
-        }
-    }
 
     Column(
         modifier = Modifier
@@ -432,170 +598,176 @@ private fun PantallaSeleccionarHermano(
             Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Volver")
         }
 
-        Text("¿Quién eres?", style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.primary)
-        Text("Selecciona tu perfil en la familia", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text("Crear tu PIN de acceso", style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.primary)
+        Text("Hola ${token.nombreUsuario}, configura un PIN de 4 dígitos para proteger tu cuenta.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
 
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(24.dp))
 
-        if (perfilSeleccionado == null) {
-            // MOSTRAR LISTA DE PERFILES COMPLETA si no hay selección
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                perfiles.forEach { perfil ->
-                    val registrado = familia.pins.containsKey(perfil) || (perfil == familia.adminNombre && familia.pin.isNotEmpty())
-                    
-                    OutlinedCard(
-                        onClick = {
-                            perfilSeleccionado = perfil
-                            pinInput = ""
-                            errorMensaje = null
-                            intentosFallidos = 0
-                        },
-                        shape = RoundedCornerShape(16.dp),
-                        colors = CardDefaults.outlinedCardColors(containerColor = MaterialTheme.colorScheme.surface),
-                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(16.dp).fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                text = perfil + if (perfil == familia.adminNombre) " (Admin)" else "",
-                                fontWeight = FontWeight.Bold
-                            )
-                            
-                            Text(
-                                text = if (registrado) "✓ PIN Configurado" else "🔑 Crear PIN",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = if (registrado) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.primary
-                            )
-                        }
-                    }
-                }
-            }
-        } else {
-            // MOSTRAR EL CHIP DEL PERFIL SELECCIONADO
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.Start
-            ) {
-                Surface(
-                    shape = RoundedCornerShape(24.dp),
-                    color = MaterialTheme.colorScheme.primaryContainer,
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary),
-                    onClick = {
-                        perfilSeleccionado = null
-                        pinInput = ""
-                        errorMensaje = null
-                        intentosFallidos = 0
-                    }
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Person,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(20.dp)
-                        )
-                        Text(
-                            text = perfilSeleccionado!! + if (perfilSeleccionado == familia.adminNombre) " (Admin)" else "",
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer,
-                            style = MaterialTheme.typography.bodyMedium
-                        )
-                        Icon(
-                            imageVector = Icons.Default.Close,
-                            contentDescription = "Cambiar selección",
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(16.dp)
-                        )
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            if (!tienePin) {
-                // MENSAJE DE CREACIÓN DE PIN
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(MaterialTheme.colorScheme.secondaryContainer, RoundedCornerShape(12.dp))
-                        .padding(16.dp)
-                ) {
-                    Text(
-                        text = "El PIN de 4 dígitos que crees ahora será el que uses para iniciar sesión la próxima vez.",
-                        color = MaterialTheme.colorScheme.onSecondaryContainer,
-                        style = MaterialTheme.typography.bodyMedium
-                    )
-                }
-                Spacer(modifier = Modifier.height(16.dp))
-            } else {
-                // MENSAJE DE INTENTOS RESTANTES
-                val intentosRestantes = 3 - intentosFallidos
-                Text(
-                    text = if (intentosRestantes > 0) "Intentos restantes: $intentosRestantes" else "Acceso bloqueado por intentos fallidos",
-                    color = if (intentosRestantes > 1) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.error,
-                    style = MaterialTheme.typography.labelMedium,
-                    fontWeight = FontWeight.Bold
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-            }
-
-            OutlinedTextField(
-                value = pinInput,
-                onValueChange = { newValue ->
-                    if (newValue.length <= 4 && intentosFallidos < 3) {
-                        pinInput = newValue.filter { it.isDigit() }
-                        errorMensaje = null
-                    }
-                },
-                label = { Text("PIN de seguridad") },
-                visualTransformation = PasswordVisualTransformation(),
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
-                singleLine = true,
-                enabled = intentosFallidos < 3,
-                isError = errorMensaje != null || intentosFallidos >= 3,
-                supportingText = {
-                    errorMensaje?.let {
-                        Text(it, color = MaterialTheme.colorScheme.error)
-                    }
-                },
-                shape = RoundedCornerShape(16.dp),
-                modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.5f), RoundedCornerShape(16.dp))
+                .padding(16.dp)
+        ) {
+            Text(
+                text = "Este PIN será tu contraseña personal para acceder a la aplicación la próxima vez que ingreses con tu pase.",
+                color = MaterialTheme.colorScheme.onSecondaryContainer,
+                style = MaterialTheme.typography.bodyMedium
             )
-
-            Spacer(modifier = Modifier.height(24.dp))
-
-            Button(
-                onClick = {
-                    if (pinInput.length != 4) {
-                        errorMensaje = "El PIN debe ser de 4 dígitos"
-                    } else if (tienePin && pinInput != pinCorrecto) {
-                        intentosFallidos += 1
-                        pinInput = ""
-                        errorMensaje = if (intentosFallidos >= 3) {
-                            "Acceso bloqueado. Debes contactar al administrador de la familia para que te renueve el PIN."
-                        } else {
-                            "PIN incorrecto. Inténtalo de nuevo."
-                        }
-                    } else {
-                        val registrarNuevo = !tienePin
-                        onConfirmar(familia.groupId, perfilSeleccionado!!, pinInput, registrarNuevo)
-                    }
-                },
-                enabled = pinInput.length == 4 && intentosFallidos < 3,
-                shape = RoundedCornerShape(16.dp),
-                modifier = Modifier.fillMaxWidth().height(56.dp)
-            ) {
-                Text(if (tienePin) "Ingresar" else "Registrar PIN e Ingresar", fontWeight = FontWeight.Bold)
-            }
         }
+
+        Spacer(modifier = Modifier.height(24.dp))
+
+        OutlinedTextField(
+            value = pinInput,
+            onValueChange = { newValue ->
+                if (newValue.length <= 4) {
+                    pinInput = newValue.filter { it.isDigit() }
+                    errorMensaje = null
+                }
+            },
+            label = { Text("Nuevo PIN (4 dígitos)") },
+            visualTransformation = PasswordVisualTransformation(),
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
+            singleLine = true,
+            isError = errorMensaje != null,
+            supportingText = {
+                errorMensaje?.let {
+                    Text(it, color = MaterialTheme.colorScheme.error)
+                }
+            },
+            shape = RoundedCornerShape(16.dp),
+            modifier = Modifier.fillMaxWidth()
+        )
+
+        Spacer(modifier = Modifier.height(32.dp))
+
+        Button(
+            onClick = {
+                if (pinInput.length != 4) {
+                    errorMensaje = "El PIN debe ser exactamente de 4 dígitos"
+                } else {
+                    onConfirmar(pinInput)
+                }
+            },
+            enabled = pinInput.length == 4,
+            shape = RoundedCornerShape(16.dp),
+            modifier = Modifier.fillMaxWidth().height(56.dp)
+        ) {
+            Text("Registrar PIN e Ingresar", fontWeight = FontWeight.Bold)
+        }
+    }
+}
+
+// ============================================================================
+// PANTALLA 5: INGRESAR PIN (Login para pases ya registrados)
+// ============================================================================
+@Composable
+private fun PantallaIngresarPin(
+    token: AccessToken,
+    onAtras: () -> Unit,
+    onConfirmar: () -> Unit
+) {
+    var pinInput by remember { mutableStateOf("") }
+    var errorMensaje by remember { mutableStateOf<String?>(null) }
+    var intentosFallidos by remember { mutableStateOf(0) }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background)
+            .padding(24.dp)
+            .verticalScroll(rememberScrollState())
+    ) {
+        IconButton(onClick = onAtras, modifier = Modifier.offset(x = (-12).dp)) {
+            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Volver")
+        }
+
+        Text("Ingresar PIN", style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.primary)
+        Text("Hola ${token.nombreUsuario}, digita tu PIN de seguridad de 4 dígitos.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+
+        Spacer(modifier = Modifier.height(24.dp))
+
+        val intentosRestantes = 3 - intentosFallidos
+        Text(
+            text = if (intentosRestantes > 0) "Intentos restantes: $intentosRestantes" else "Acceso bloqueado por intentos fallidos",
+            color = if (intentosRestantes > 1) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.error,
+            style = MaterialTheme.typography.labelMedium,
+            fontWeight = FontWeight.Bold
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+
+        OutlinedTextField(
+            value = pinInput,
+            onValueChange = { newValue ->
+                if (newValue.length <= 4 && intentosFallidos < 3) {
+                    pinInput = newValue.filter { it.isDigit() }
+                    errorMensaje = null
+                }
+            },
+            label = { Text("PIN de seguridad") },
+            visualTransformation = PasswordVisualTransformation(),
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
+            singleLine = true,
+            enabled = intentosFallidos < 3,
+            isError = errorMensaje != null || intentosFallidos >= 3,
+            supportingText = {
+                errorMensaje?.let {
+                    Text(it, color = MaterialTheme.colorScheme.error)
+                }
+            },
+            shape = RoundedCornerShape(16.dp),
+            modifier = Modifier.fillMaxWidth()
+        )
+
+        Spacer(modifier = Modifier.height(32.dp))
+
+        Button(
+            onClick = {
+                if (pinInput.length != 4) {
+                    errorMensaje = "El PIN debe ser de 4 dígitos"
+                } else if (pinInput != token.pin) {
+                    intentosFallidos += 1
+                    pinInput = ""
+                    errorMensaje = if (intentosFallidos >= 3) {
+                        "Acceso bloqueado. Contacta al administrador para que reinicie tu PIN."
+                    } else {
+                        "PIN incorrecto. Inténtalo de nuevo."
+                    }
+                } else {
+                    onConfirmar()
+                }
+            },
+            enabled = pinInput.length == 4 && intentosFallidos < 3,
+            shape = RoundedCornerShape(16.dp),
+            modifier = Modifier.fillMaxWidth().height(56.dp)
+        ) {
+            Text("Ingresar", fontWeight = FontWeight.Bold)
+        }
+    }
+}
+
+// ============================================================================
+// FUNCIONES AUXILIARES
+// ============================================================================
+private fun despacharInvitacionWhatsApp(context: Context, nombreHermano: String, tokenAcceso: String) {
+    val texto = """
+        ¡Hola $nombreHermano! Descarga la app de la familia para coordinar el cuidado de los papás.
+        
+        Tu pase único de entrada directa es:
+        👉 *$tokenAcceso*
+    """.trimIndent()
+
+    val intent = Intent(Intent.ACTION_SEND).apply {
+        type = "text/plain"
+        putExtra(Intent.EXTRA_TEXT, texto)
+        setPackage("com.whatsapp")
+    }
+
+    runCatching {
+        context.startActivity(intent)
+    }.onFailure {
+        // Fallback
+        context.startActivity(Intent.createChooser(intent, "Enviar código por..."))
     }
 }
