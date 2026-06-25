@@ -50,24 +50,24 @@ jobs:
         run: |
           VERSION="${{ github.ref_name }}"
           APK_SRC=$(find app/build/outputs/apk/release -name "*.apk" | head -1)
-          APK_DEST="app/build/outputs/apk/release/MisViejos-${VERSION}.apk"
+          APK_DEST="app/build/outputs/apk/release/RegistroMedico-${VERSION}.apk"
           mv "$APK_SRC" "$APK_DEST"
           echo "APK_PATH=$APK_DEST" >> $GITHUB_ENV
-          echo "APK_NAME=MisViejos-${VERSION}.apk" >> $GITHUB_ENV
+          echo "APK_NAME=RegistroMedico-${VERSION}.apk" >> $GITHUB_ENV
 
       # 7. Crear el GitHub Release y subir el APK
       - name: 🎉 Crear GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.ref_name }}
-          name: "Nuestros Viejos ${{ github.ref_name }}"
+          name: "Registro Medico ${{ github.ref_name }}"
           body: |
-            ## 📱 Nuestros Viejos ${{ github.ref_name }}
+            ## 📱 Registro Medico ${{ github.ref_name }}
 
             Nueva versión de la aplicación disponible para descargar.
 
             ### Instalación
-            1. Descarga el archivo `MisViejos-${{ github.ref_name }}.apk`
+            1. Descarga el archivo `RegistroMedico-${{ github.ref_name }}.apk`
             2. En tu Android, habilita **Instalar apps desconocidas** si es necesario
             3. Abre el archivo y sigue los pasos de instalación
           files: ${{ env.APK_PATH }}
