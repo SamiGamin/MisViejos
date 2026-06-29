@@ -1,0 +1,83 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // --- REGLAS PARA LA COLECCIÓN DE FAMILIAS ---
+    match /familias/{groupId} {
+      // Permitir leer la información de la familia
+      allow get: if true;
+      allow list: if false; // Evitar que se listen todas las familias de la base de datos
+
+      // Permitir crear una familia si tiene los campos requeridos
+      allow create: if request.resource.data.adminNombre is string 
+                   && request.resource.data.pin is string
+                   && request.resource.data.hermanos is list;
+
+      // Permitir actualizaciones para pins, saldos, cuotas, etc.
+      allow update: if request.resource.data.adminNombre == resource.data.adminNombre;
+
+      // Prohibir explícitamente eliminar registros de familias desde la aplicación
+      allow delete: if false;
+
+      // --- SUBCOLECCIÓN DE TURNOS (DENTRO DE FAMILIA) ---
+      match /turnos_viejos/{turnoId} {
+        allow read: if true;
+        allow create, update: if request.resource.data.groupId == groupId
+                             && request.resource.data.tipoCuidado is string
+                             && request.resource.data.hermanoAsignado is string;
+        allow delete: if false; // Los turnos no se eliminan, se marcan como completados o cancelados
+      }
+    }
+
+    // --- REGLAS PARA LA COLECCIÓN DE ACCESS TOKENS ---
+    match /access_tokens/{token} {
+      // Cualquiera puede validar un token por su ID al unirse a la familia
+      allow get: if true;
+      
+      // Permitir listar tokens únicamente si se filtra por groupId (máximo 50 por consulta)
+      allow list: if request.query.limit <= 50 && request.query.groupId != null;
+
+      // Permitir crear tokens si tienen los tipos y roles adecuados
+      allow create: if request.resource.data.groupId is string
+                   && request.resource.data.nombreUsuario is string
+                   && request.resource.data.rol in ['OWNER', 'CO_ADMIN', 'MEMBER'];
+
+      // Permitir actualizar el pin o el rol del token, pero no cambiar el groupId asociado
+      allow update: if request.resource.data.groupId == resource.data.groupId;
+
+      // Permitir eliminar tokens (por ejemplo, al limpiar invitaciones o al cambiar de miembros)
+      allow delete: if true;
+    }
+
+    // --- REGLAS PARA LA COLECCIÓN DE METAS DE AHORRO MENSUALES ---
+    match /ahorros_mensuales/{ahorroId} {
+      allow read: if true;
+      
+      // Validar estructura al crear o actualizar metas mensuales
+      allow create, update: if request.resource.data.groupId is string
+                           && request.resource.data.mes is int
+                           && request.resource.data.anio is int
+                           && request.resource.data.metaSugerida is number;
+      
+      allow delete: if false;
+    }
+
+    // --- REGLAS PARA LA COLECCIÓN DE TRANSACCIONES DE FONDO ---
+    match /transacciones_fondo/{txId} {
+      allow read: if true;
+
+      // Validar estructura de las transacciones (ingresos/gastos)
+      allow create: if request.resource.data.groupId is string
+                   && request.resource.data.tipo in ['INGRESO', 'GASTO']
+                   && request.resource.data.monto is number
+                   && request.resource.data.monto > 0;
+
+      // Las transacciones financieras no se pueden modificar para garantizar la integridad del saldo
+      allow update: if false;
+
+      // Se permite eliminar transacciones (el saldo se recalcula en la app mediante transacción)
+      allow delete: if true;
+    }
+  }
+}
