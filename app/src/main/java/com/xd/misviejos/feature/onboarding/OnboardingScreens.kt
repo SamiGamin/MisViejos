@@ -329,7 +329,7 @@ private fun PantallaFundarFamilia(
 
         Spacer(modifier = Modifier.height(24.dp))
 
-        Text("1. El Apellido de la tribu", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+        Text("1. El Apellido de la familia", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
         OutlinedTextField(
             value = apellido,
             onValueChange = { apellido = it },
@@ -346,7 +346,7 @@ private fun PantallaFundarFamilia(
                     .padding(12.dp)
             ) {
                 Text(
-                    text = "ID de tu tribu: $codigoGenerado",
+                    text = "ID de tu familia: $codigoGenerado",
                     style = MaterialTheme.typography.titleMedium,
                     color = MaterialTheme.colorScheme.onSecondaryContainer,
                     textAlign = TextAlign.Center,
@@ -487,7 +487,7 @@ private fun PantallaMostrarTokensGenesis(
         Spacer(modifier = Modifier.height(24.dp))
 
         Text(
-            text = "¡Tribu Creada! 🎉",
+            text = "¡Familia Creada! 🎉",
             style = MaterialTheme.typography.titleLarge,
             color = MaterialTheme.colorScheme.primary,
             fontWeight = FontWeight.Bold

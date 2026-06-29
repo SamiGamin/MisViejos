@@ -1,6 +1,6 @@
 # Registro Medico 👵👴
 
-**Registro Medico** es una aplicación móvil para Android diseñada para coordinar las labores de cuidado y acompañamiento de adultos mayores (padres o abuelos) dentro del núcleo familiar. La aplicación permite organizar turnos, llevar una bitácora médica compartida en tiempo real y gestionar la información de la tribu familiar sin necesidad de servidores externos.
+**Registro Medico** es una aplicación móvil para Android diseñada para coordinar las labores de cuidado y acompañamiento de adultos mayores (padres o abuelos) dentro del núcleo familiar. La aplicación permite organizar turnos, llevar una bitácora médica compartida en tiempo real y gestionar la información de la familia sin necesidad de servidores externos.
 
 ---
 
@@ -19,7 +19,7 @@ El proyecto sigue estrictamente las reglas oficiales del stack tecnológico y ar
 ## 🌟 Características Principales
 
 ### 1. Registro e Ingreso Sencillo
-- Creación de una "Familia" o unión a una existente mediante un código único de la Tribu.
+- Creación de una "Familia" o unión a una existente mediante un código único de la Familia.
 - Autenticación rápida por PIN de seguridad personalizado para cada miembro.
 
 ### 2. Mi Turno (Labores Activas)

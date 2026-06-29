@@ -7,6 +7,9 @@ import com.xd.misviejos.data.mapper.toDomain
 import com.xd.misviejos.domain.model.AccessToken
 import com.xd.misviejos.domain.model.Familia
 import com.xd.misviejos.domain.repository.FamiliaRepository
+import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.tasks.await
 
 class FirestoreFamiliaRepository(
@@ -27,7 +30,8 @@ class FirestoreFamiliaRepository(
             "papa" to familia.papa,
             "mama" to familia.mama,
             "hermanos" to familia.hermanos,
-            "pins" to familia.pins
+            "pins" to familia.pins,
+            "isAhorroActivo" to familia.isAhorroActivo
         )
         batch.set(refFamilia, data)
 
@@ -72,7 +76,10 @@ class FirestoreFamiliaRepository(
             val hermanos = snapshot.get("hermanos") as? List<String> ?: emptyList()
             @Suppress("UNCHECKED_CAST")
             val pins = snapshot.get("pins") as? Map<String, String> ?: emptyMap()
-            Familia(groupId, adminNombre, pin, papa, mama, hermanos, pins)
+            val isAhorroActivo = snapshot.getBoolean("isAhorroActivo") ?: false
+            val saldoFondoActual = snapshot.getDouble("saldo_fondo_actual") ?: 0.0
+            val cuotaPorIntegrante = snapshot.getDouble("cuotaPorIntegrante") ?: 0.0
+            Familia(groupId, adminNombre, pin, papa, mama, hermanos, pins, isAhorroActivo, saldoFondoActual, cuotaPorIntegrante)
         } else {
             null
         }
@@ -99,7 +106,10 @@ class FirestoreFamiliaRepository(
             "papa" to familia.papa,
             "mama" to familia.mama,
             "hermanos" to familia.hermanos,
-            "pins" to familia.pins
+            "pins" to familia.pins,
+            "isAhorroActivo" to familia.isAhorroActivo,
+            "saldo_fondo_actual" to familia.saldo_fondo_actual,
+            "cuotaPorIntegrante" to familia.cuotaPorIntegrante
         )
         batch.set(refFamilia, dataFamilia)
 
@@ -165,5 +175,39 @@ class FirestoreFamiliaRepository(
 
     override suspend fun actualizarRolToken(token: String, nuevoRol: String): Result<Unit> = runCatching {
         firestore.collection("access_tokens").document(token).update("rol", nuevoRol).await()
+    }
+
+    override suspend fun actualizarAhorroActivo(groupId: String, isActivo: Boolean): Result<Unit> = runCatching {
+        coleccion.document(groupId).update("isAhorroActivo", isActivo).await()
+    }
+
+    override suspend fun actualizarCuotaIntegrante(groupId: String, cuota: Double): Result<Unit> = runCatching {
+        coleccion.document(groupId).update("cuotaPorIntegrante", cuota).await()
+    }
+
+    override fun observarFamilia(groupId: String): Flow<Familia?> = callbackFlow {
+        val listener = coleccion.document(groupId).addSnapshotListener { snapshot, error ->
+            if (error != null) {
+                close(error)
+                return@addSnapshotListener
+            }
+            if (snapshot != null && snapshot.exists()) {
+                val adminNombre = snapshot.getString("adminNombre") ?: ""
+                val pin = snapshot.getString("pin") ?: ""
+                val papa = snapshot.getString("papa") ?: ""
+                val mama = snapshot.getString("mama") ?: ""
+                @Suppress("UNCHECKED_CAST")
+                val hermanos = snapshot.get("hermanos") as? List<String> ?: emptyList()
+                @Suppress("UNCHECKED_CAST")
+                val pins = snapshot.get("pins") as? Map<String, String> ?: emptyMap()
+                val isAhorroActivo = snapshot.getBoolean("isAhorroActivo") ?: false
+                val saldoFondoActual = snapshot.getDouble("saldo_fondo_actual") ?: 0.0
+                val cuotaPorIntegrante = snapshot.getDouble("cuotaPorIntegrante") ?: 0.0
+                trySend(Familia(groupId, adminNombre, pin, papa, mama, hermanos, pins, isAhorroActivo, saldoFondoActual, cuotaPorIntegrante))
+            } else {
+                trySend(null)
+            }
+        }
+        awaitClose { listener.remove() }
     }
 }

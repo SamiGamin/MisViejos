@@ -71,6 +71,11 @@ fun AjustesScreen(
         null -> true // modo oscuro por defecto
     }
 
+    // Estado de familia reactivo desde Firestore
+    val familiaState by remember(usuario.groupId) {
+        familiaRepository.observarFamilia(usuario.groupId)
+    }.collectAsState(initial = null)
+
     // 2. Estado para el diálogo de edición de familia (Admin únicamente)
     var mostrarEditFamilia by remember { mutableStateOf(false) }
     var mostrarInvitaciones by remember { mutableStateOf(false) }
@@ -172,7 +177,7 @@ fun AjustesScreen(
                 
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Text(
-                        text = "Código de la Tribu: ${usuario.groupId}",
+                        text = "Código de la Familia: ${usuario.groupId}",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -257,7 +262,7 @@ fun AjustesScreen(
             ) {
                 Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     Text(
-                        text = "Edita los datos principales de tu tribu, añade nuevos hermanos/cuidadores o actualiza a quiénes cuidan.",
+                        text = "Edita los datos principales de tu familia, añade nuevos hermanos/cuidadores o actualiza a quiénes cuidan.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -279,6 +284,54 @@ fun AjustesScreen(
                         Icon(Icons.Default.Share, contentDescription = null, modifier = Modifier.size(16.dp))
                         Spacer(modifier = Modifier.width(8.dp))
                         Text("Invitar Hermanos (Compartir Pases)", fontWeight = FontWeight.Bold)
+                    }
+
+                    // --- INTERRUPTOR DE AHORRO VOLUNTARIO ---
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant, thickness = 0.5.dp)
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "Fondo de Ahorro Voluntario",
+                                fontWeight = FontWeight.Bold,
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                            Text(
+                                text = "Activa un pozo común mensual para medicinas o emergencias.",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            if (usuario.rol != "OWNER") {
+                                Text(
+                                    text = "Solo el Dueño (Owner) puede modificar esto.",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.error,
+                                    fontWeight = FontWeight.SemiBold,
+                                    modifier = Modifier.padding(top = 2.dp)
+                                )
+                            }
+                        }
+                        Switch(
+                            checked = familiaState?.isAhorroActivo == true,
+                            enabled = usuario.rol == "OWNER",
+                            onCheckedChange = { nuevoEstado ->
+                                scope.launch {
+                                    familiaRepository.actualizarAhorroActivo(usuario.groupId, nuevoEstado)
+                                        .onSuccess {
+                                            val msg = if (nuevoEstado) "Fondo de ahorro activado" else "Fondo de ahorro desactivado"
+                                            Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+                                        }
+                                        .onFailure {
+                                            Toast.makeText(context, "Error al actualizar fondo: ${it.message}", Toast.LENGTH_LONG).show()
+                                        }
+                                }
+                            }
+                        )
                     }
                 }
             }
@@ -470,7 +523,7 @@ fun AjustesScreen(
                 )
 
                 Text(
-                    text = "Actualiza los papás/abuelos que están bajo cuidado de la tribu:",
+                    text = "Actualiza los papás/abuelos que están bajo cuidado de la familia:",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -705,7 +758,8 @@ fun AjustesScreen(
                                 papa = papaInput.trim(),
                                 mama = mamaInput.trim(),
                                 hermanos = hermanosList.toList(),
-                                pins = familiaOriginal!!.pins
+                                pins = familiaOriginal!!.pins,
+                                isAhorroActivo = familiaOriginal!!.isAhorroActivo
                             )
                             scope.launch {
                                 val res = familiaRepository.crearFamilia(familiaActualizada)

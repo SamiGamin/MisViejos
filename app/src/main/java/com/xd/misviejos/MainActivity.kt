@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -48,6 +49,8 @@ import com.xd.misviejos.core.updater.AppUpdater
 import com.xd.misviejos.core.updater.UpdateInfo
 import com.xd.misviejos.data.repository.FirestoreFamiliaRepository
 import com.xd.misviejos.data.repository.FirestoreTurnoRepository
+import com.xd.misviejos.data.repository.FirestoreAhorroRepository
+import com.xd.misviejos.feature.timeline.AhorroScreen
 import com.xd.misviejos.domain.model.AccessToken
 import com.xd.misviejos.domain.model.Familia
 import com.xd.misviejos.domain.model.Turno
@@ -70,6 +73,10 @@ import kotlinx.coroutines.flow.combine
 import androidx.compose.material3.CircularProgressIndicator
 import kotlinx.coroutines.launch
 import com.xd.misviejos.core.utils.parseMarkdownToAnnotatedString
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 
 
 class MainActivity : ComponentActivity() {
@@ -178,10 +185,45 @@ fun PantallaMaestra(
     sessionManager: SessionManager,
     familiaRepository: FamiliaRepository
 ) {
+    // Escuchar el estado de la familia en tiempo real
+    val familiaState by remember(usuario.groupId) {
+        familiaRepository.observarFamilia(usuario.groupId)
+    }.collectAsState(initial = null)
+
     // Memoria de la pestaña pisada (Por defecto arranca en "Mi Turno")
     var pestanaActual by remember { mutableStateOf<TabNav>(TabNav.MiTurno) }
-    val items = listOf(TabNav.MiTurno, TabNav.Pista, TabNav.Testigo, TabNav.Archivo, TabNav.Ajustes)
+    var pestanaPrevia by remember { mutableStateOf<TabNav>(TabNav.MiTurno) }
+
+    LaunchedEffect(pestanaActual) {
+        if (pestanaActual != TabNav.Ajustes) {
+            pestanaPrevia = pestanaActual
+        }
+    }
+
+    // La lista de items de navegación es dinámica según el estado del ahorro voluntario,
+    // y ya no incluye Ajustes ya que ahora se accede desde la barra de herramientas (toolbar).
+    val items = remember(familiaState?.isAhorroActivo) {
+        if (familiaState?.isAhorroActivo == true) {
+            listOf(TabNav.MiTurno, TabNav.Pista, TabNav.Testigo, TabNav.Ahorro, TabNav.Archivo)
+        } else {
+            listOf(TabNav.MiTurno, TabNav.Pista, TabNav.Testigo, TabNav.Archivo)
+        }
+    }
+
+    // Si se desactiva el ahorro y el usuario estaba en esa pantalla, reubicarlo a Mi Turno
+    LaunchedEffect(familiaState?.isAhorroActivo) {
+        if (familiaState?.isAhorroActivo == false && pestanaActual == TabNav.Ahorro) {
+            pestanaActual = TabNav.MiTurno
+        }
+    }
+
     var mostrandoAgendar by remember { mutableStateOf(false) }
+    var eliminarModoActivo by remember { mutableStateOf(false) }
+    var mostrarDialogoCuotaGlobal by remember { mutableStateOf(false) }
+
+    LaunchedEffect(pestanaActual) {
+        eliminarModoActivo = false
+    }
     var turnoAEditar by remember { mutableStateOf<Turno?>(null) }
 
     // ── Detección automática de actualizaciones al abrir la app ──
@@ -320,6 +362,7 @@ fun PantallaMaestra(
                                 TabNav.MiTurno -> "Mi Turno"
                                 TabNav.Pista -> "Agenda de Cuidado"
                                 TabNav.Testigo -> "Bitácora Médica"
+                                TabNav.Ahorro -> "Fondo Familiar"
                                 TabNav.Archivo -> "Historial de Cuidado"
                                 TabNav.Ajustes -> "Ajustes y Preferencias"
                             },
@@ -332,6 +375,7 @@ fun PantallaMaestra(
                                 TabNav.MiTurno -> "Labores de ${usuario.nombreUsuario}"
                                 TabNav.Pista -> "Cronograma familiar"
                                 TabNav.Testigo -> "Reportes de los hermanos"
+                                TabNav.Ahorro -> "Ahorro Voluntario de la Familia"
                                 TabNav.Archivo -> "Turnos finalizados"
                                 TabNav.Ajustes -> "Configuración de la app"
                             },
@@ -351,6 +395,67 @@ fun PantallaMaestra(
                                 imageVector = Icons.Default.Add,
                                 contentDescription = "Agendar Cuidado",
                                 tint = MaterialTheme.colorScheme.onPrimary
+                            )
+                        }
+                    } else if (pestanaActual == TabNav.Ahorro && usuario.rol == "OWNER") {
+                        var menuExpandido by remember { mutableStateOf(false) }
+                        Box {
+                            IconButton(
+                                onClick = { menuExpandido = true },
+                                modifier = Modifier
+                                    .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(12.dp))
+                                    .size(40.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.MoreVert,
+                                    contentDescription = "Opciones de Fondo",
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            DropdownMenu(
+                                expanded = menuExpandido,
+                                onDismissRequest = { menuExpandido = false }
+                            ) {
+                                DropdownMenuItem(
+                                    text = { Text(if (eliminarModoActivo) "Desactivar Eliminar" else "Eliminar Transacciones") },
+                                    onClick = {
+                                        menuExpandido = false
+                                        eliminarModoActivo = !eliminarModoActivo
+                                    }
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("Editar Cuota Mensual") },
+                                    onClick = {
+                                        menuExpandido = false
+                                        mostrarDialogoCuotaGlobal = true
+                                    }
+                                )
+                            }
+                        }
+                    } else if (pestanaActual == TabNav.Ajustes) {
+                        IconButton(
+                            onClick = { pestanaActual = pestanaPrevia },
+                            modifier = Modifier
+                                .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(12.dp))
+                                .size(40.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                contentDescription = "Volver",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    } else if (pestanaActual != TabNav.Pista && pestanaActual != TabNav.Ahorro) {
+                        IconButton(
+                            onClick = { pestanaActual = TabNav.Ajustes },
+                            modifier = Modifier
+                                .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(12.dp))
+                                .size(40.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Filled.Settings,
+                                contentDescription = "Ajustes",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
                     }
@@ -441,6 +546,19 @@ fun PantallaMaestra(
                             turnoRepository = repo
                         )
                     }
+                    TabNav.Ahorro -> {
+                        val firestore = FirebaseFirestore.getInstance()
+                        val repoAhorro = FirestoreAhorroRepository(firestore)
+
+                        AhorroScreen(
+                            usuario = usuario,
+                            familiaRepository = familiaRepository,
+                            ahorroRepository = repoAhorro,
+                            eliminarModoActivo = eliminarModoActivo,
+                            mostrarDialogoCuotaHoisted = mostrarDialogoCuotaGlobal,
+                            onMostrarDialogoCuotaChange = { mostrarDialogoCuotaGlobal = it }
+                        )
+                    }
                     TabNav.Ajustes -> {
                         AjustesScreen(
                             usuario = usuario,
@@ -479,6 +597,10 @@ fun PantallaBautizoPreview() {
                 override suspend fun actualizarAccessTokenPin(token: String, pin: String) = Result.success(Unit)
                 override suspend fun obtenerTokensDeFamilia(groupId: String) = Result.success(emptyList<AccessToken>())
                 override suspend fun actualizarRolToken(token: String, nuevoRol: String) = Result.success(Unit)
+
+                override suspend fun actualizarAhorroActivo(groupId: String, isActivo: Boolean) = Result.success(Unit)
+                override suspend fun actualizarCuotaIntegrante(groupId: String, cuota: Double) = Result.success(Unit)
+                override fun observarFamilia(groupId: String) = kotlinx.coroutines.flow.flowOf(null)
             }
         )
     }

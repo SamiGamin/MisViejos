@@ -43,6 +43,13 @@ sealed class TabNav(
         iconoNoSeleccionado = Icons.Outlined.Folder
     )
 
+    object Ahorro : TabNav(
+        ruta = "ahorro_screen",
+        titulo = "Fondo",
+        iconoSeleccionado = Icons.Filled.MonetizationOn,
+        iconoNoSeleccionado = Icons.Outlined.MonetizationOn
+    )
+
     object Ajustes : TabNav(
         ruta = "ajustes",
         titulo = "Ajustes",
