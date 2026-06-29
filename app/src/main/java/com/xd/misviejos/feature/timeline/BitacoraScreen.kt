@@ -8,6 +8,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
+import com.xd.misviejos.core.utils.fadeInEntrance
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -92,8 +94,12 @@ fun BitacoraScreen(
                 verticalArrangement = Arrangement.spacedBy(16.dp),
                 modifier = Modifier.weight(1f).fillMaxWidth()
             ) {
-                items(reportesBitacora) { turno ->
-                    BitacoraItem(turno = turno, onShare = { compartirEnWhatsApp(context, turno) })
+                itemsIndexed(reportesBitacora) { index, turno ->
+                    BitacoraItem(
+                        turno = turno,
+                        onShare = { compartirEnWhatsApp(context, turno) },
+                        modifier = Modifier.fadeInEntrance(index)
+                    )
                 }
                 item {
                     Spacer(modifier = Modifier.height(24.dp))
@@ -106,7 +112,8 @@ fun BitacoraScreen(
 @Composable
 private fun BitacoraItem(
     turno: Turno,
-    onShare: () -> Unit
+    onShare: () -> Unit,
+    modifier: Modifier = Modifier
 ) {
     val localDateTime = remember(turno.fechaInstante) {
         LocalDateTime.ofInstant(turno.fechaInstante, ZoneId.systemDefault())
@@ -121,7 +128,7 @@ private fun BitacoraItem(
         shape = RoundedCornerShape(24.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-        modifier = Modifier.fillMaxWidth()
+        modifier = modifier.fillMaxWidth()
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             // CABECERA DEL POST: Avatar del hermano, nombre y fecha de cierre

@@ -4,6 +4,12 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
@@ -505,66 +511,99 @@ fun PantallaMaestra(
                     .background(MaterialTheme.colorScheme.background)
                     .padding(horizontal = 16.dp)
             ) {
-                when (pestanaActual) {
-                    TabNav.MiTurno -> {
-                        val firestore = FirebaseFirestore.getInstance()
-                        val repo = FirestoreTurnoRepository(firestore)
+                AnimatedContent(
+                    targetState = pestanaActual,
+                    transitionSpec = {
+                        val indexTarget = when (targetState) {
+                            TabNav.MiTurno -> 0
+                            TabNav.Pista -> 1
+                            TabNav.Testigo -> 2
+                            TabNav.Ahorro -> 3
+                            TabNav.Archivo -> 4
+                            TabNav.Ajustes -> 5
+                        }
+                        val indexInitial = when (initialState) {
+                            TabNav.MiTurno -> 0
+                            TabNav.Pista -> 1
+                            TabNav.Testigo -> 2
+                            TabNav.Ahorro -> 3
+                            TabNav.Archivo -> 4
+                            TabNav.Ajustes -> 5
+                        }
+                        if (indexTarget > indexInitial) {
+                            (slideInHorizontally { width -> width } + fadeIn()).togetherWith(
+                                slideOutHorizontally { width -> -width } + fadeOut()
+                            )
+                        } else {
+                            (slideInHorizontally { width -> -width } + fadeIn()).togetherWith(
+                                slideOutHorizontally { width -> width } + fadeOut()
+                            )
+                        }
+                    },
+                    label = "TabNavTransition",
+                    modifier = Modifier.fillMaxSize()
+                ) { targetPestana ->
+                    when (targetPestana) {
+                        TabNav.MiTurno -> {
+                            val firestore = FirebaseFirestore.getInstance()
+                            val repo = FirestoreTurnoRepository(firestore)
 
-                        MiTurnoScreen(
-                            groupId = usuario.groupId,
-                            nombreUsuario = usuario.nombreUsuario,
-                            turnoRepository = repo
-                        )
-                    }
-                    TabNav.Pista -> {
-                        val firestore = FirebaseFirestore.getInstance()
-                        val repo = FirestoreTurnoRepository(firestore)
+                            MiTurnoScreen(
+                                groupId = usuario.groupId,
+                                nombreUsuario = usuario.nombreUsuario,
+                                turnoRepository = repo
+                            )
+                        }
+                        TabNav.Pista -> {
+                            val firestore = FirebaseFirestore.getInstance()
+                            val repo = FirestoreTurnoRepository(firestore)
 
-                        TimelineScreen(
-                            groupId = usuario.groupId,
-                            turnoRepository = repo,
-                            isAdmin = usuario.rol == "OWNER" || usuario.rol == "CO_ADMIN",
-                            onEditarTurno = { turnoAEditar = it },
-                            modifier = Modifier.fillMaxSize()
-                        )
-                    }
-                    TabNav.Testigo -> {
-                        val firestore = FirebaseFirestore.getInstance()
-                        val repo = FirestoreTurnoRepository(firestore)
+                            TimelineScreen(
+                                groupId = usuario.groupId,
+                                turnoRepository = repo,
+                                isAdmin = usuario.rol == "OWNER" || usuario.rol == "CO_ADMIN",
+                                onEditarTurno = { turnoAEditar = it },
+                                modifier = Modifier.fillMaxSize()
+                            )
+                        }
+                        TabNav.Testigo -> {
+                            val firestore = FirebaseFirestore.getInstance()
+                            val repo = FirestoreTurnoRepository(firestore)
 
-                        BitacoraScreen(
-                            groupId = usuario.groupId,
-                            turnoRepository = repo
-                        )
-                    }
-                    TabNav.Archivo -> {
-                        val firestore = FirebaseFirestore.getInstance()
-                        val repo = FirestoreTurnoRepository(firestore)
+                            BitacoraScreen(
+                                groupId = usuario.groupId,
+                                turnoRepository = repo
+                            )
+                        }
+                        TabNav.Archivo -> {
+                            val firestore = FirebaseFirestore.getInstance()
+                            val repo = FirestoreTurnoRepository(firestore)
 
-                        HistorialScreen(
-                            groupId = usuario.groupId,
-                            turnoRepository = repo
-                        )
-                    }
-                    TabNav.Ahorro -> {
-                        val firestore = FirebaseFirestore.getInstance()
-                        val repoAhorro = FirestoreAhorroRepository(firestore)
+                            HistorialScreen(
+                                groupId = usuario.groupId,
+                                turnoRepository = repo
+                            )
+                        }
+                        TabNav.Ahorro -> {
+                            val firestore = FirebaseFirestore.getInstance()
+                            val repoAhorro = FirestoreAhorroRepository(firestore)
 
-                        AhorroScreen(
-                            usuario = usuario,
-                            familiaRepository = familiaRepository,
-                            ahorroRepository = repoAhorro,
-                            eliminarModoActivo = eliminarModoActivo,
-                            mostrarDialogoCuotaHoisted = mostrarDialogoCuotaGlobal,
-                            onMostrarDialogoCuotaChange = { mostrarDialogoCuotaGlobal = it }
-                        )
-                    }
-                    TabNav.Ajustes -> {
-                        AjustesScreen(
-                            usuario = usuario,
-                            sessionManager = sessionManager,
-                            familiaRepository = familiaRepository
-                        )
+                            AhorroScreen(
+                                usuario = usuario,
+                                familiaRepository = familiaRepository,
+                                ahorroRepository = repoAhorro,
+                                eliminarModoActivo = eliminarModoActivo,
+                                mostrarDialogoCuotaHoisted = mostrarDialogoCuotaGlobal,
+                                onMostrarDialogoCuotaChange = { mostrarDialogoCuotaGlobal = it }
+                            )
+                        }
+                        TabNav.Ajustes -> {
+                            AjustesScreen(
+                                usuario = usuario,
+                                sessionManager = sessionManager,
+                                familiaRepository = familiaRepository
+                            )
+                        }
                     }
                 }
             }

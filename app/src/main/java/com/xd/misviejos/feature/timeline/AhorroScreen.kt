@@ -8,6 +8,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
@@ -32,6 +33,8 @@ import com.xd.misviejos.core.datastore.UsuarioSesion
 import com.xd.misviejos.core.utils.CurrencyVisualTransformation
 import com.xd.misviejos.core.utils.rawDigitsToDouble
 import com.xd.misviejos.core.utils.toCOP
+import com.xd.misviejos.core.utils.bounceClick
+import com.xd.misviejos.core.utils.fadeInEntrance
 import com.xd.misviejos.domain.model.AhorroMensual
 import com.xd.misviejos.domain.model.TransaccionFondo
 import com.xd.misviejos.domain.repository.AhorroRepository
@@ -165,6 +168,7 @@ fun AhorroScreen(
                             modifier = Modifier
                                 .weight(1f)
                                 .height(48.dp)
+                                .bounceClick()
                         ) {
                             Icon(Icons.Default.Add, contentDescription = null)
                             Spacer(modifier = Modifier.width(6.dp))
@@ -178,6 +182,7 @@ fun AhorroScreen(
                             modifier = Modifier
                                 .weight(1f)
                                 .height(48.dp)
+                                .bounceClick()
                         ) {
                             Icon(Icons.Default.Remove, contentDescription = null)
                             Spacer(modifier = Modifier.width(6.dp))
@@ -314,11 +319,12 @@ fun AhorroScreen(
                     }
                 }
             } else {
-                items(transaccionesState) { tx ->
+                itemsIndexed(transaccionesState) { index, tx ->
                     FilaTransaccionItem(
                         tx = tx,
                         eliminarModoActivo = eliminarModoActivo,
-                        onDeleteClick = { transaccionAEliminar = tx }
+                        onDeleteClick = { transaccionAEliminar = tx },
+                        modifier = Modifier.fadeInEntrance(index)
                     )
                 }
             }
@@ -824,7 +830,8 @@ fun AhorroScreen(
 private fun FilaTransaccionItem(
     tx: TransaccionFondo,
     eliminarModoActivo: Boolean,
-    onDeleteClick: () -> Unit
+    onDeleteClick: () -> Unit,
+    modifier: Modifier = Modifier
 ) {
     val esIngreso = tx.tipo == "INGRESO"
     val colorIndicador = if (esIngreso) Color(0xFF2E7D32) else MaterialTheme.colorScheme.error
@@ -833,7 +840,7 @@ private fun FilaTransaccionItem(
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
-        modifier = Modifier.fillMaxWidth()
+        modifier = modifier.fillMaxWidth()
     ) {
         Row(
             modifier = Modifier
